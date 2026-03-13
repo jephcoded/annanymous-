@@ -15,6 +15,7 @@ import { API_BASE_URL } from "../config/api";
 const WALLET_SESSION_KEY = "ananymous.wallet.session";
 const PREVIEW_WALLET_ADDRESS = "0xPreviewWallet00000000000000000000000001";
 const PREVIEW_WALLET_TOKEN = "expo-go-preview-session";
+const CONNECT_TIMEOUT_MS = 20000;
 
 type WalletContextValue = {
   isConnected: boolean;
@@ -30,6 +31,14 @@ type WalletSession = {
   address: string;
   token: string;
 };
+
+const withTimeout = async <T,>(promise: Promise<T>, message: string) =>
+  Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(message)), CONNECT_TIMEOUT_MS);
+    }),
+  ]);
 
 const WalletContext = createContext<WalletContextValue | undefined>(undefined);
 
@@ -67,7 +76,7 @@ export const PreviewWalletProvider = ({
 };
 
 export const WalletProvider = ({ children }: { children: ReactNode }) => {
-  const { sdk, provider, chainId, account } = useSDK();
+  const { sdk } = useSDK();
   const [session, setSession] = useState<WalletSession | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,17 +113,6 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     [],
   );
 
-  const switchToEthereumMainnet = useCallback(async () => {
-    if (!provider || !chainId || chainId === "0x1") {
-      return;
-    }
-
-    await provider.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x1" }],
-    });
-  }, [chainId, provider]);
-
   const connectWallet = useCallback(async () => {
     if (!sdk) {
       setError("MetaMask SDK is not ready yet. Please try again.");
@@ -125,27 +123,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      const connectedAccounts = (await sdk.connect()) as string[] | undefined;
-      const walletAddress = account ?? connectedAccounts?.[0];
-
-      if (!walletAddress) {
-        throw new Error("No wallet account returned from MetaMask.");
-      }
-
-      await switchToEthereumMainnet();
-
-      if (!provider) {
-        throw new Error(
-          "Ethereum provider unavailable after wallet connection.",
-        );
-      }
-
       const challengeResponse = await fetch(`${API_BASE_URL}/auth/challenge`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({}),
       });
 
       const challengePayload = await challengeResponse.json();
@@ -156,12 +139,10 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         );
       }
 
-      const normalizedWalletAddress =
-        challengePayload.walletAddress ?? walletAddress;
-      const signature = (await provider.request({
-        method: "personal_sign",
-        params: [challengePayload.challenge, normalizedWalletAddress],
-      })) as string;
+      const signature = await withTimeout(
+        sdk.connectAndSign({ msg: challengePayload.challenge }) as Promise<string>,
+        "MetaMask did not finish the connection request. Close both apps and try again.",
+      );
 
       const verifyResponse = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: "POST",
@@ -169,7 +150,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          walletAddress: normalizedWalletAddress,
+          challengeId: challengePayload.challengeId,
           signature,
         }),
       });
@@ -183,13 +164,19 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const nextSession = {
-        address: verifyPayload.walletAddress ?? normalizedWalletAddress,
+        address: verifyPayload.walletAddress,
         token: verifyPayload.token,
       };
 
       setSession(nextSession);
       await persistSession(nextSession);
     } catch (connectError) {
+      try {
+        await sdk?.terminate();
+      } catch (terminateError) {
+        console.warn("Failed to reset MetaMask session after connect error", terminateError);
+      }
+
       const message =
         connectError instanceof Error
           ? connectError.message
@@ -199,7 +186,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsAuthenticating(false);
     }
-  }, [account, persistSession, provider, sdk, switchToEthereumMainnet]);
+  }, [persistSession, sdk]);
 
   const disconnectWallet = useCallback(async () => {
     setError(null);

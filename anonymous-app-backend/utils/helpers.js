@@ -12,64 +12,57 @@ const normalizeWallet = (walletAddress) => {
   return ethers.getAddress(walletAddress);
 };
 
-const buildChallengeMessage = (walletAddress, nonce) => {
-  return [
+const buildChallengeMessage = (challengeId, nonce) =>
+  [
     "Welcome to Ananymous.",
     "",
     "Sign this message to prove you own this wallet and continue anonymously.",
-    `Wallet: ${walletAddress}`,
+    `Challenge ID: ${challengeId}`,
     `Nonce: ${nonce}`,
     `Issued At: ${new Date().toISOString()}`,
   ].join("\n");
-};
 
-exports.generateChallenge = (walletAddress) => {
-  const normalizedWallet = normalizeWallet(walletAddress);
-  if (!normalizedWallet) {
-    throw new Error("Wallet address is invalid");
-  }
-
+exports.generateChallenge = () => {
+  const challengeId = crypto.randomBytes(12).toString("hex");
   const nonce = crypto.randomBytes(16).toString("hex");
-  const challenge = buildChallengeMessage(normalizedWallet, nonce);
+  const challenge = buildChallengeMessage(challengeId, nonce);
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS).toISOString();
 
-  challengeStore.set(normalizedWallet, {
+  challengeStore.set(challengeId, {
     challenge,
     expiresAt,
   });
 
-  return { challenge, expiresAt, walletAddress: normalizedWallet };
+  return { challengeId, challenge, expiresAt };
 };
 
 exports.challengeExpiry = () =>
   new Date(Date.now() + CHALLENGE_TTL_MS).toISOString();
 
-exports.getStoredChallenge = (walletAddress) => {
-  const normalizedWallet = normalizeWallet(walletAddress);
-  if (!normalizedWallet) {
+exports.getStoredChallenge = (challengeId) => {
+  if (!challengeId) {
     return null;
   }
 
-  const entry = challengeStore.get(normalizedWallet);
+  const entry = challengeStore.get(challengeId);
   if (!entry) {
     return null;
   }
 
   if (new Date(entry.expiresAt).getTime() <= Date.now()) {
-    challengeStore.delete(normalizedWallet);
+    challengeStore.delete(challengeId);
     return null;
   }
 
-  return { ...entry, walletAddress: normalizedWallet };
+  return { ...entry, challengeId };
 };
 
-exports.consumeChallenge = (walletAddress) => {
-  const normalizedWallet = normalizeWallet(walletAddress);
-  if (!normalizedWallet) {
+exports.consumeChallenge = (challengeId) => {
+  if (!challengeId) {
     return;
   }
 
-  challengeStore.delete(normalizedWallet);
+  challengeStore.delete(challengeId);
 };
 
 exports.verifySignature = (walletAddress, signature, challenge) => {
@@ -83,6 +76,19 @@ exports.verifySignature = (walletAddress, signature, challenge) => {
     return normalizeWallet(recoveredWallet) === normalizedWallet;
   } catch (_error) {
     return false;
+  }
+};
+
+exports.recoverWalletFromSignature = (signature, challenge) => {
+  if (!signature || !challenge) {
+    return null;
+  }
+
+  try {
+    const recoveredWallet = ethers.verifyMessage(challenge, signature);
+    return normalizeWallet(recoveredWallet);
+  } catch (_error) {
+    return null;
   }
 };
 

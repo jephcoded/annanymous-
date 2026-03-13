@@ -5,8 +5,7 @@ import "react-native-url-polyfill/auto";
 import { MetaMaskProvider } from "@metamask/sdk-react-native";
 import Constants from "expo-constants";
 import { useEffect } from "react";
-import { AppState, Linking, LogBox } from "react-native";
-import BackgroundTimer from "react-native-background-timer";
+import { AppState, LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AppNavigator from "./src/AppNavigator";
 import {
@@ -60,26 +59,13 @@ export default function App() {
   return (
     <MetaMaskProvider
       sdkOptions={{
-        checkInstallationImmediately: false,
-        useDeeplink: true,
-        timer: BackgroundTimer,
-        openDeeplink: (link) => {
-          if (canOpenLink) {
-            Linking.openURL(link);
-          }
-        },
-        storage: {
-          enabled: true,
-        },
         dappMetadata: {
           name: "Ananymous",
-          url: "https://ananymous.app",
-          iconUrl: "https://ananymous.app/icon.png",
+          url: "https://annanymous.onrender.com",
+          iconUrl: "https://annanymous.onrender.com",
           scheme: "ananymous",
         },
-        logging: {
-          developerMode: false,
-        },
+        infuraAPIKey: process.env.EXPO_PUBLIC_INFURA_API_KEY,
       }}
     >
       <AppShell />

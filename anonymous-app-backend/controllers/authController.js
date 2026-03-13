@@ -4,48 +4,27 @@ const User = require("../models/User");
 
 exports.challenge = async (req, res, next) => {
   try {
-    const { walletAddress } = req.body;
-    if (!walletAddress) {
-      return res.status(400).json({
-        error: {
-          code: "WALLET_REQUIRED",
-          message: "walletAddress is required",
-          status: 400,
-        },
-      });
-    }
-
-    const payload = helpers.generateChallenge(walletAddress);
+    const payload = helpers.generateChallenge();
     res.json(payload);
   } catch (error) {
-    if (error.message === "Wallet address is invalid") {
-      return res.status(400).json({
-        error: {
-          code: "WALLET_INVALID",
-          message: "Wallet address is invalid",
-          status: 400,
-        },
-      });
-    }
-
     next(error);
   }
 };
 
 exports.verify = async (req, res, next) => {
   try {
-    const { walletAddress, signature } = req.body;
-    if (!walletAddress || !signature) {
+    const { challengeId, signature } = req.body;
+    if (!challengeId || !signature) {
       return res.status(400).json({
         error: {
           code: "VERIFY_FIELDS_REQUIRED",
-          message: "walletAddress and signature are required",
+          message: "challengeId and signature are required",
           status: 400,
         },
       });
     }
 
-    const pendingChallenge = helpers.getStoredChallenge(walletAddress);
+    const pendingChallenge = helpers.getStoredChallenge(challengeId);
     if (!pendingChallenge) {
       return res.status(400).json({
         error: {
@@ -56,12 +35,11 @@ exports.verify = async (req, res, next) => {
       });
     }
 
-    const isValid = helpers.verifySignature(
-      pendingChallenge.walletAddress,
+    const recoveredWallet = helpers.recoverWalletFromSignature(
       signature,
       pendingChallenge.challenge,
     );
-    if (!isValid) {
+    if (!recoveredWallet) {
       return res.status(401).json({
         error: {
           code: "SIGNATURE_INVALID",
@@ -71,17 +49,15 @@ exports.verify = async (req, res, next) => {
       });
     }
 
-    helpers.consumeChallenge(pendingChallenge.walletAddress);
+    helpers.consumeChallenge(challengeId);
 
-    const user = await User.findOrCreateByWallet(
-      pendingChallenge.walletAddress,
-    );
+    const user = await User.findOrCreateByWallet(recoveredWallet);
     const token = jwt.sign(
-      { sub: user.id, wallet: pendingChallenge.walletAddress },
+      { sub: user.id, wallet: recoveredWallet },
       process.env.JWT_SECRET,
       { expiresIn: "12h" },
     );
-    res.json({ token, user, walletAddress: pendingChallenge.walletAddress });
+    res.json({ token, user, walletAddress: recoveredWallet });
   } catch (error) {
     next(error);
   }
