@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: ananymous-backend
+    runtime: node
+    rootDir: anonymous-app-backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PGSSLMODE
+        value: require
+      - key: CHAIN_ID
+        value: 84532
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SOCIAL_CONTRACT_ADDRESS
+        sync: false
