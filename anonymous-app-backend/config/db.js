@@ -4,56 +4,86 @@ require("dotenv").config();
 
 const connectionString = process.env.DATABASE_URL;
 const parsedUrl = connectionString ? new URL(connectionString) : null;
+const dnsPromises = dns.promises;
 
-const lookupPreferIpv4 = (hostname, options, callback) => {
-  const done = typeof options === "function" ? options : callback;
-  const normalizedOptions =
-    typeof options === "object" && options !== null ? options : undefined;
+const resolveDatabaseHost = async (hostname) => {
+  if (!hostname) {
+    return hostname;
+  }
 
-  dns.lookup(
-    hostname,
-    {
-      ...normalizedOptions,
+  try {
+    const ipv4 = await dnsPromises.lookup(hostname, {
       family: 4,
       all: false,
       verbatim: false,
-    },
-    (error, address, family) => {
-      if (!error && address) {
-        done(null, address, family ?? 4);
-        return;
+    });
+
+    if (ipv4?.address) {
+      return ipv4.address;
+    }
+  } catch (lookupError) {
+    try {
+      const ipv4Addresses = await dnsPromises.resolve4(hostname);
+
+      if (ipv4Addresses?.length) {
+        return ipv4Addresses[0];
       }
+    } catch (resolve4Error) {
+      try {
+        const ipv6Addresses = await dnsPromises.resolve6(hostname);
 
-      dns.resolve4(hostname, (resolve4Error, ipv4Addresses) => {
-        if (!resolve4Error && ipv4Addresses?.length) {
-          done(null, ipv4Addresses[0], 4);
-          return;
+        if (ipv6Addresses?.length) {
+          return ipv6Addresses[0];
         }
+      } catch (resolve6Error) {
+        throw lookupError || resolve4Error || resolve6Error;
+      }
+    }
+  }
 
-        dns.resolve6(hostname, (resolve6Error, ipv6Addresses) => {
-          if (!resolve6Error && ipv6Addresses?.length) {
-            done(null, ipv6Addresses[0], 6);
-            return;
-          }
-
-          done(error || resolve4Error || resolve6Error);
-        });
-      });
-      return;
-    },
-  );
+  return hostname;
 };
 
-const pool = new Pool({
-  user: parsedUrl ? decodeURIComponent(parsedUrl.username) : undefined,
-  password: parsedUrl ? decodeURIComponent(parsedUrl.password) : undefined,
-  host: parsedUrl?.hostname,
-  port: parsedUrl?.port ? Number(parsedUrl.port) : 5432,
-  database: parsedUrl?.pathname?.replace(/^\//, ""),
-  ssl:
-    process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : false,
-  lookup: lookupPreferIpv4,
-});
+let poolPromise;
+
+const createPool = async () => {
+  const host = await resolveDatabaseHost(parsedUrl?.hostname);
+
+  return new Pool({
+    user: parsedUrl ? decodeURIComponent(parsedUrl.username) : undefined,
+    password: parsedUrl ? decodeURIComponent(parsedUrl.password) : undefined,
+    host,
+    port: parsedUrl?.port ? Number(parsedUrl.port) : 5432,
+    database: parsedUrl?.pathname?.replace(/^\//, ""),
+    ssl:
+      process.env.PGSSLMODE === "require"
+        ? { rejectUnauthorized: false }
+        : false,
+  });
+};
+
+const getPool = async () => {
+  if (!poolPromise) {
+    poolPromise = createPool();
+  }
+
+  return poolPromise;
+};
+
+const pool = {
+  query: async (text, params) => {
+    const resolvedPool = await getPool();
+    return resolvedPool.query(text, params);
+  },
+  connect: async () => {
+    const resolvedPool = await getPool();
+    return resolvedPool.connect();
+  },
+  end: async () => {
+    const resolvedPool = await getPool();
+    return resolvedPool.end();
+  },
+};
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
