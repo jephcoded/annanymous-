@@ -8,32 +8,40 @@ const parsedUrl = connectionString ? new URL(connectionString) : null;
 const lookupPreferIpv4 = (hostname, options, callback) => {
   const done = typeof options === "function" ? options : callback;
   const normalizedOptions =
-    typeof options === "object" && options !== null ? options : {};
+    typeof options === "object" && options !== null ? options : undefined;
 
-  const requestAllAddresses = {
-    ...normalizedOptions,
-    all: true,
-    verbatim: false,
-  };
-
-  dns.lookup(hostname, requestAllAddresses, (error, addresses) => {
-    if (!error && addresses?.length) {
-      const preferredAddress =
-        addresses.find((entry) => entry.family === 4) ?? addresses[0];
-
-      done(null, preferredAddress.address, preferredAddress.family);
-      return;
-    }
-
-    dns.resolve6(hostname, (resolveError, addresses) => {
-      if (!resolveError && addresses?.length) {
-        done(null, addresses[0], 6);
+  dns.lookup(
+    hostname,
+    {
+      ...normalizedOptions,
+      family: 4,
+      all: false,
+      verbatim: false,
+    },
+    (error, address, family) => {
+      if (!error && address) {
+        done(null, address, family ?? 4);
         return;
       }
 
-      done(error);
-    });
-  });
+      dns.resolve4(hostname, (resolve4Error, ipv4Addresses) => {
+        if (!resolve4Error && ipv4Addresses?.length) {
+          done(null, ipv4Addresses[0], 4);
+          return;
+        }
+
+        dns.resolve6(hostname, (resolve6Error, ipv6Addresses) => {
+          if (!resolve6Error && ipv6Addresses?.length) {
+            done(null, ipv6Addresses[0], 6);
+            return;
+          }
+
+          done(error || resolve4Error || resolve6Error);
+        });
+      });
+      return;
+    },
+  );
 };
 
 const pool = new Pool({
