@@ -5,14 +5,23 @@ require("dotenv").config();
 const connectionString = process.env.DATABASE_URL;
 const parsedUrl = connectionString ? new URL(connectionString) : null;
 
-const lookupWithIpv6Fallback = (hostname, options, callback) => {
+const lookupPreferIpv4 = (hostname, options, callback) => {
   const done = typeof options === "function" ? options : callback;
   const normalizedOptions =
-    typeof options === "object" && options !== null ? options : undefined;
+    typeof options === "object" && options !== null ? options : {};
 
-  dns.lookup(hostname, normalizedOptions, (error, address, family) => {
-    if (!error) {
-      done(null, address, family);
+  const requestAllAddresses = {
+    ...normalizedOptions,
+    all: true,
+    verbatim: false,
+  };
+
+  dns.lookup(hostname, requestAllAddresses, (error, addresses) => {
+    if (!error && addresses?.length) {
+      const preferredAddress =
+        addresses.find((entry) => entry.family === 4) ?? addresses[0];
+
+      done(null, preferredAddress.address, preferredAddress.family);
       return;
     }
 
@@ -35,7 +44,7 @@ const pool = new Pool({
   database: parsedUrl?.pathname?.replace(/^\//, ""),
   ssl:
     process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : false,
-  lookup: lookupWithIpv6Fallback,
+  lookup: lookupPreferIpv4,
 });
 
 module.exports = {
