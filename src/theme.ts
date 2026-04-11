@@ -1,64 +1,82 @@
+import { Platform } from "react-native";
+
+const FONT_FAMILY = Platform.select({
+  ios: "Menlo",
+  android: "monospace",
+  default: "monospace",
+});
+
 // Theme colors for Anonymous App
 export const COLORS = {
-  background: "#070B14", // Deep night background
-  primary: "#8B5CFF", // Electric purple
-  secondary: "#34C8FF", // Cyan blue
-  text: "#FFFFFF", // White
-  card: "#101826", // Glass card background
-  gray: "#93A0BC", // Subtle text
-  border: "#223049", // Border/Divider
+  background: "#050505",
+  primary: "#D4D4D8",
+  secondary: "#8F9098",
+  text: "#F5F5F5",
+  card: "#111111",
+  gray: "#9A9AA1",
+  border: "#27272A",
 };
 
 export const TYPOGRAPHY = {
   display: {
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: "900" as const,
+    fontFamily: FONT_FAMILY,
   },
   heading: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: "800" as const,
+    fontFamily: FONT_FAMILY,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 21,
+    lineHeight: 28,
     fontWeight: "700" as const,
+    fontFamily: FONT_FAMILY,
   },
   section: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: "700" as const,
+    fontFamily: FONT_FAMILY,
   },
   body: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
     fontWeight: "500" as const,
+    fontFamily: FONT_FAMILY,
   },
   label: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: "700" as const,
+    fontFamily: FONT_FAMILY,
   },
   meta: {
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 17,
     fontWeight: "600" as const,
+    fontFamily: FONT_FAMILY,
   },
   button: {
     fontSize: 16,
     lineHeight: 20,
     fontWeight: "800" as const,
+    fontFamily: FONT_FAMILY,
   },
   tab: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: "700" as const,
+    fontFamily: FONT_FAMILY,
   },
   eyebrow: {
     fontSize: 10,
     lineHeight: 12,
     fontWeight: "800" as const,
     letterSpacing: 1.5,
+    fontFamily: FONT_FAMILY,
   },
 };

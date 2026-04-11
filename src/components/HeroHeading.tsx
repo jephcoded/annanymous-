@@ -20,7 +20,7 @@ type HeroHeadingProps = {
   gradientColors?: [string, string];
 };
 
-const DEFAULT_GRADIENT: [string, string] = ["#151D33", "#0A0F1F"];
+const DEFAULT_GRADIENT: [string, string] = [COLORS.background, COLORS.card];
 
 const HeroHeading = ({
   title,
@@ -31,9 +31,8 @@ const HeroHeading = ({
   stats = [],
   gradientColors = DEFAULT_GRADIENT,
 }: HeroHeadingProps) => {
-  const accentPrimary = COLORS.primary + "33";
-  const accentSecondary = COLORS.secondary + "25";
-  const eyebrowLabel = title === "Ananymous" ? "LIVE ANONYMOUS FEED" : "VERIFIED EXPERIENCE";
+  const eyebrowLabel =
+    title === "Ananymous" ? "ANONYMOUS MENU" : "PRIVATE ACCESS";
 
   return (
     <LinearGradient
@@ -42,156 +41,157 @@ const HeroHeading = ({
       end={{ x: 1, y: 1 }}
       style={styles.heroHeader}
     >
-      <View pointerEvents="none" style={styles.heroBorder} />
-      <View style={styles.heroTextBlock}>
+      <View pointerEvents="none" style={styles.heroFrame} />
+      <View style={styles.heroTopRow}>
         <View style={styles.eyebrowRow}>
           <View style={styles.eyebrowDot} />
           <Text style={styles.eyebrowText}>{eyebrowLabel}</Text>
         </View>
-        <Text style={styles.appName}>{title}</Text>
-        <Text style={styles.heroSubtitle}>{subtitle}</Text>
-        {!!stats.length && (
-          <View style={styles.heroStatsRow}>
-            {stats.map((stat, index) => (
-              <View key={`${stat.label}-${index}`} style={styles.heroStat}>
-                <Ionicons
-                  name={stat.icon}
-                  size={14}
-                  color={stat.color ?? COLORS.secondary}
-                />
-                <Text style={styles.heroStatText}>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {ctaLabel ? (
+          <TouchableOpacity
+            style={styles.heroBadge}
+            onPress={onPressCta}
+            disabled={!onPressCta}
+          >
+            <Ionicons name={ctaIcon} size={15} color={COLORS.text} />
+            <Text style={styles.heroBadgeText}>{ctaLabel}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
-      {ctaLabel ? (
-        <TouchableOpacity
-          style={styles.heroBadge}
-          onPress={onPressCta}
-          disabled={!onPressCta}
-        >
-          <Ionicons name={ctaIcon} size={16} color={COLORS.primary} />
-          <Text style={styles.heroBadgeText}>{ctaLabel}</Text>
-        </TouchableOpacity>
-      ) : null}
-      <View
-        pointerEvents="none"
-        style={[styles.heroAccentOne, { backgroundColor: accentPrimary }]}
-      />
-      <View
-        pointerEvents="none"
-        style={[styles.heroAccentTwo, { backgroundColor: accentSecondary }]}
-      />
+
+      <Text style={styles.appName}>{title}</Text>
+      <Text style={styles.heroSubtitle}>{subtitle}</Text>
+
+      {!!stats.length && (
+        <View style={styles.heroStatsRow}>
+          {stats.map((stat, index) => (
+            <View key={`${stat.label}-${index}`} style={styles.heroStat}>
+              <Ionicons
+                name={stat.icon}
+                size={14}
+                color={stat.color ?? COLORS.secondary}
+              />
+              <Text style={styles.heroStatText}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View pointerEvents="none" style={styles.heroAccentOne} />
+      <View pointerEvents="none" style={styles.heroAccentTwo} />
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   heroHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 18,
-    padding: 24,
-    borderRadius: 30,
+    padding: 20,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: "rgba(140,165,255,0.18)",
-    marginBottom: 20,
+    borderColor: COLORS.border,
+    marginBottom: 18,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 10,
+    shadowOpacity: 0.28,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
-  heroBorder: {
+  heroFrame: {
     position: "absolute",
     inset: 1,
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
-  heroTextBlock: { flex: 1 },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  },
   eyebrowRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 10,
   },
   eyebrowDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.secondary,
-    shadowColor: COLORS.secondary,
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.primary,
   },
   eyebrowText: {
-    color: "rgba(198,214,255,0.72)",
+    color: "rgba(212,212,216,0.72)",
     ...TYPOGRAPHY.eyebrow,
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
   },
   appName: {
     color: COLORS.text,
     ...TYPOGRAPHY.display,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    marginBottom: 8,
   },
   heroSubtitle: {
-    color: "rgba(219,227,255,0.72)",
+    color: "rgba(212,212,216,0.74)",
     ...TYPOGRAPHY.label,
-    marginTop: 8,
-    fontWeight: "600",
+    maxWidth: "92%",
   },
   heroStatsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
+    gap: 8,
+    marginTop: 16,
   },
   heroStat: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  heroStatText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  heroStatText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.meta,
+  },
   heroBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.11)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignSelf: "flex-start",
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     zIndex: 1,
   },
-  heroBadgeText: { color: COLORS.text, ...TYPOGRAPHY.label },
+  heroBadgeText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+  },
   heroAccentOne: {
     position: "absolute",
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    top: -52,
-    right: -58,
-    opacity: 0.95,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    top: -44,
+    right: -20,
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   heroAccentTwo: {
     position: "absolute",
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    bottom: -30,
-    left: -32,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    bottom: -24,
+    left: -14,
+    backgroundColor: "rgba(120,120,128,0.08)",
   },
 });
 

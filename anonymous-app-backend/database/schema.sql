@@ -6,12 +6,59 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Communities: private groups for anonymous users
+CREATE TABLE IF NOT EXISTS communities (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_by BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  invite_code TEXT UNIQUE NOT NULL,
+  is_private BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Community membership: tracks which users belong to which communities
+CREATE TABLE IF NOT EXISTS community_members (
+  id BIGSERIAL PRIMARY KEY,
+  community_id BIGINT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status TEXT NOT NULL DEFAULT 'pending' -- 'pending', 'active', 'removed'
+);
+
+-- Community invites: tracks invite links and their status
+CREATE TABLE IF NOT EXISTS community_invites (
+  id BIGSERIAL PRIMARY KEY,
+  community_id BIGINT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  invite_code TEXT UNIQUE NOT NULL,
+  created_by BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Community chat messages
+CREATE TABLE IF NOT EXISTS community_messages (
+  id BIGSERIAL PRIMARY KEY,
+  community_id BIGINT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Posts include optional media and are linked to the authoring wallet
 CREATE TABLE IF NOT EXISTS posts (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   body TEXT NOT NULL,
   media_url TEXT,
+  category TEXT NOT NULL DEFAULT 'general',
+  hashtags TEXT[] NOT NULL DEFAULT '{}',
+  content_mode TEXT NOT NULL DEFAULT 'standard',
+  expires_at TIMESTAMPTZ,
+  campus_tag TEXT,
+  city_tag TEXT,
   content_cid TEXT,
   content_hash TEXT,
   chain_id INTEGER,
@@ -27,6 +74,12 @@ ALTER TABLE posts ADD COLUMN IF NOT EXISTS chain_id INTEGER;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS contract_address TEXT;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS transaction_hash TEXT;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS sync_status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'general';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS hashtags TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS content_mode TEXT NOT NULL DEFAULT 'standard';
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS campus_tag TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS city_tag TEXT;
 
 -- Poll options belong to a post that has poll metadata on the frontend
 CREATE TABLE IF NOT EXISTS poll_options (
@@ -125,6 +178,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- Helpful indexes for scrolling feeds + joins
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category);
+CREATE INDEX IF NOT EXISTS idx_posts_mode ON posts(content_mode);
+CREATE INDEX IF NOT EXISTS idx_posts_expires_at ON posts(expires_at);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_votes_post ON votes(post_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);

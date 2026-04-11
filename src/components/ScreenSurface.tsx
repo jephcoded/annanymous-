@@ -29,13 +29,13 @@ const ScreenSurface = ({
       ]}
     >
       <LinearGradient
-        colors={["#0A1020", COLORS.background, "#04060C"]}
+        colors={["#0B0713", COLORS.background, "#040509"]}
         start={{ x: 0.1, y: 0 }}
         end={{ x: 0.95, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       <LinearGradient
-        colors={["rgba(255,255,255,0.05)", "rgba(255,255,255,0)"]}
+        colors={["rgba(255,255,255,0.025)", "rgba(255,255,255,0)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.8 }}
         style={styles.film}
@@ -70,8 +70,8 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: COLORS.primary + "30",
-    opacity: 0.75,
+    backgroundColor: COLORS.primary + "1E",
+    opacity: 0.65,
   },
   glowCenter: {
     position: "absolute",
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: "rgba(52,200,255,0.12)",
+    backgroundColor: "rgba(34,211,238,0.1)",
   },
   glowBottom: {
     position: "absolute",
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: COLORS.secondary + "24",
+    backgroundColor: COLORS.secondary + "16",
   },
 });
 

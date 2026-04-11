@@ -22,7 +22,11 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || "*")
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+    if (
+      !origin ||
+      allowedOrigins.includes("*") ||
+      allowedOrigins.includes(origin)
+    ) {
       callback(null, true);
       return;
     }
@@ -74,11 +78,15 @@ app.get("/api/v1/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
+const communityRoutes = require("./routes/communityRoutes");
+const communityMessageRoutes = require("./routes/communityMessageRoutes");
 app.use("/api/v1/posts", postRoutes);
 app.use("/api/v1/comments", commentRoutes);
 app.use("/api/v1/votes", voteRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/communities", communityRoutes);
+app.use("/api/v1/community-messages", communityMessageRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

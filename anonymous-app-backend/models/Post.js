@@ -1,6 +1,30 @@
 const db = require("../config/db");
 
-const buildListQuery = ({ cursor, limit = 20, pollsOnly = false, postId }) => {
+const sanitizeTag = (value) => value?.trim().toLowerCase() || null;
+
+const sanitizeCategory = (value) => value?.trim().toLowerCase() || "general";
+
+const deriveHashtags = (body = "") =>
+  Array.from(
+    new Set(
+      [...body.matchAll(/#([a-z0-9_]+)/gi)].map((match) =>
+        match[1].toLowerCase(),
+      ),
+    ),
+  );
+
+const buildListQuery = ({
+  cursor,
+  limit = 20,
+  pollsOnly = false,
+  postId,
+  category,
+  hashtag,
+  campusTag,
+  cityTag,
+  contentMode,
+  trending = false,
+}) => {
   const params = [];
   let query = `SELECT
     p.id,
@@ -8,6 +32,12 @@ const buildListQuery = ({ cursor, limit = 20, pollsOnly = false, postId }) => {
     p.media_url AS "mediaUrl",
     p.created_at AS "createdAt",
     p.user_id AS "userId",
+    p.category,
+    p.hashtags,
+    p.content_mode AS "contentMode",
+    p.expires_at AS "expiresAt",
+    p.campus_tag AS "campusTag",
+    p.city_tag AS "cityTag",
     json_build_object(
       'contentCid', p.content_cid,
       'contentHash', p.content_hash,
@@ -19,7 +49,16 @@ const buildListQuery = ({ cursor, limit = 20, pollsOnly = false, postId }) => {
     COALESCE(v.upvotes, 0)::int AS "upVotes",
     COALESCE(v.downvotes, 0)::int AS "downVotes",
     COALESCE(c.comment_count, 0)::int AS "commentCount",
-    COALESCE(po.poll_options, '[]'::json) AS "pollOptions"
+    COALESCE(po.poll_options, '[]'::json) AS "pollOptions",
+    GREATEST(
+      0,
+      (
+        COALESCE(v.upvotes, 0) * 3 +
+        COALESCE(c.comment_count, 0) * 2 +
+        COALESCE(json_array_length(po.poll_options), 0) * 2 -
+        COALESCE(v.downvotes, 0)
+      )
+    )::int AS "trendingScore"
   FROM posts p
   LEFT JOIN (
     SELECT
@@ -55,6 +94,8 @@ const buildListQuery = ({ cursor, limit = 20, pollsOnly = false, postId }) => {
   ) po ON po.post_id = p.id`;
 
   const filters = [];
+  filters.push("(p.expires_at IS NULL OR p.expires_at > NOW())");
+
   if (postId) {
     params.push(postId);
     filters.push(`p.id = $${params.length}`);
@@ -66,28 +107,88 @@ const buildListQuery = ({ cursor, limit = 20, pollsOnly = false, postId }) => {
   if (pollsOnly) {
     filters.push("po.poll_options IS NOT NULL");
   }
+  if (category) {
+    params.push(category);
+    filters.push(`p.category = $${params.length}`);
+  }
+  if (contentMode) {
+    params.push(contentMode);
+    filters.push(`p.content_mode = $${params.length}`);
+  }
+  if (hashtag) {
+    params.push(hashtag);
+    filters.push(`$${params.length} = ANY(p.hashtags)`);
+  }
+  if (campusTag) {
+    params.push(campusTag);
+    filters.push(`p.campus_tag = $${params.length}`);
+  }
+  if (cityTag) {
+    params.push(cityTag);
+    filters.push(`p.city_tag = $${params.length}`);
+  }
 
   if (filters.length) {
     query += ` WHERE ${filters.join(" AND ")}`;
   }
 
   params.push(limit);
-  query += ` ORDER BY p.id DESC LIMIT $${params.length}`;
+  query += trending
+    ? ` ORDER BY "trendingScore" DESC, p.id DESC LIMIT $${params.length}`
+    : ` ORDER BY p.id DESC LIMIT $${params.length}`;
 
   return { query, params };
 };
 
-exports.list = async ({ cursor, limit = 20, pollsOnly = false }) => {
-  const { query, params } = buildListQuery({ cursor, limit, pollsOnly });
+exports.list = async ({
+  cursor,
+  limit = 20,
+  pollsOnly = false,
+  category,
+  hashtag,
+  campusTag,
+  cityTag,
+  contentMode,
+  trending = false,
+}) => {
+  const { query, params } = buildListQuery({
+    cursor,
+    limit,
+    pollsOnly,
+    category,
+    hashtag,
+    campusTag,
+    cityTag,
+    contentMode,
+    trending,
+  });
   const result = await db.query(query, params);
   return result.rows;
 };
 
-exports.create = async ({ body, mediaUrl, pollOptions, userId, decentralized = {} }) => {
-  const normalizedBody = body?.trim();
+exports.create = async ({
+  body,
+  mediaUrl,
+  pollOptions,
+  userId,
+  category,
+  contentMode,
+  expiresAt,
+  campusTag,
+  cityTag,
+  decentralized = {},
+}) => {
+  const normalizedBody = body?.trim() || "";
+  const normalizedMediaUrl = mediaUrl?.trim() || null;
   const normalizedPollOptions = Array.isArray(pollOptions)
     ? pollOptions.map((option) => option?.trim()).filter(Boolean)
     : [];
+  const normalizedCategory = sanitizeCategory(category);
+  const normalizedContentMode = contentMode?.trim().toLowerCase() || "standard";
+  const normalizedHashtags = deriveHashtags(normalizedBody);
+  const normalizedCampusTag = sanitizeTag(campusTag);
+  const normalizedCityTag = sanitizeTag(cityTag);
+  const normalizedExpiresAt = expiresAt ? new Date(expiresAt) : null;
   const normalizedMetadata = {
     contentCid: decentralized.contentCid || null,
     contentHash: decentralized.contentHash || null,
@@ -99,10 +200,10 @@ exports.create = async ({ body, mediaUrl, pollOptions, userId, decentralized = {
       (decentralized.transactionHash ? "anchored" : "pending"),
   };
 
-  if (!normalizedBody) {
-    const error = new Error("Post body is required");
+  if (!normalizedBody && !normalizedMediaUrl) {
+    const error = new Error("Add a caption or an image before posting");
     error.status = 400;
-    error.code = "POST_BODY_REQUIRED";
+    error.code = "POST_CONTENT_REQUIRED";
     throw error;
   }
 
@@ -113,22 +214,45 @@ exports.create = async ({ body, mediaUrl, pollOptions, userId, decentralized = {
     throw error;
   }
 
+  if (
+    normalizedExpiresAt &&
+    (Number.isNaN(normalizedExpiresAt.getTime()) ||
+      normalizedExpiresAt.getTime() <= Date.now())
+  ) {
+    const error = new Error("Temporary post expiry must be in the future");
+    error.status = 400;
+    error.code = "POST_EXPIRY_INVALID";
+    throw error;
+  }
+
   const result = await db.query(
     `INSERT INTO posts (
       body,
       media_url,
       user_id,
+      category,
+      hashtags,
+      content_mode,
+      expires_at,
+      campus_tag,
+      city_tag,
       content_cid,
       content_hash,
       chain_id,
       contract_address,
       transaction_hash,
       sync_status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
     [
       normalizedBody,
-      mediaUrl,
+      normalizedMediaUrl,
       userId,
+      normalizedCategory,
+      normalizedHashtags,
+      normalizedContentMode,
+      normalizedExpiresAt ? normalizedExpiresAt.toISOString() : null,
+      normalizedCampusTag,
+      normalizedCityTag,
       normalizedMetadata.contentCid,
       normalizedMetadata.contentHash,
       normalizedMetadata.chainId,

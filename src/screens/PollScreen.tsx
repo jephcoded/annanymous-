@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     RefreshControl,
@@ -15,9 +16,40 @@ import { FeedPost, getFeed, voteOnPoll } from "../services/api";
 import { buildActionRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
 
-const COLOR_STOPS = [COLORS.primary, COLORS.secondary, "#4ADE80", "#F97316"];
+const COLOR_STOPS = [COLORS.primary, COLORS.secondary, "#6B7280", "#52525B"];
+
+const getPollInsight = (poll: FeedPost | null) => {
+  if (!poll || !poll.pollOptions.length) {
+    return {
+      leadLabel: "No live poll",
+      turnoutLabel: "0 votes",
+      competitivenessLabel: "Waiting for responses",
+    };
+  }
+
+  const rankedOptions = [...poll.pollOptions].sort(
+    (left, right) => Number(right.votes || 0) - Number(left.votes || 0),
+  );
+  const leader = rankedOptions[0];
+  const runnerUp = rankedOptions[1];
+  const totalVotes = rankedOptions.reduce(
+    (sum, option) => sum + Number(option.votes || 0),
+    0,
+  );
+  const gap = runnerUp
+    ? Math.abs(Number(leader.votes || 0) - Number(runnerUp.votes || 0))
+    : Number(leader.votes || 0);
+
+  return {
+    leadLabel: `Leading: ${leader.label}`,
+    turnoutLabel: `${totalVotes} total vote${totalVotes === 1 ? "" : "s"}`,
+    competitivenessLabel:
+      gap <= 1 ? "Tight race" : gap <= 3 ? "Competitive" : "Clear leader",
+  };
+};
 
 const PollScreen = () => {
+  const navigation = useNavigation<any>();
   const { token, isConnected } = useWallet();
   const [polls, setPolls] = useState<FeedPost[]>([]);
   const [selectedPollId, setSelectedPollId] = useState<number | null>(null);
@@ -62,6 +94,10 @@ const PollScreen = () => {
       ) || 0,
     [selectedPoll],
   );
+  const pollInsight = useMemo(
+    () => getPollInsight(selectedPoll),
+    [selectedPoll],
+  );
 
   const handleVote = useCallback(
     async (optionId: number) => {
@@ -71,12 +107,7 @@ const PollScreen = () => {
       }
 
       try {
-        await voteOnPoll(
-          token,
-          selectedPoll.id,
-          optionId,
-          buildActionRecord(),
-        );
+        await voteOnPoll(token, selectedPoll.id, optionId, buildActionRecord());
         await loadPolls();
       } catch (error) {
         setStatusMessage(
@@ -92,6 +123,11 @@ const PollScreen = () => {
   const heroStats = [
     {
       icon: "stats-chart-outline" as const,
+      label: `${polls.length} live polls`,
+      color: COLORS.gray,
+    },
+    {
+      icon: "list-outline" as const,
       label: `${selectedPoll?.pollOptions.length || 0} options`,
       color: COLORS.secondary,
     },
@@ -101,6 +137,10 @@ const PollScreen = () => {
       color: COLORS.primary,
     },
   ];
+
+  const openPollComposer = useCallback(() => {
+    navigation.navigate("Composer", { startWithPoll: true });
+  }, [navigation]);
 
   return (
     <ScreenSurface style={styles.surface}>
@@ -112,15 +152,32 @@ const PollScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         <HeroHeading
-          title="Pulse Polls"
+          title="Polls"
           subtitle={
-            selectedPoll?.body || "The latest community questions live here."
+            selectedPoll?.body ||
+            "Vote in live polls or start a new one from the post flow."
           }
           ctaLabel="Refresh"
           ctaIcon="refresh"
           onPressCta={loadPolls}
           stats={heroStats}
         />
+
+        <View style={styles.toolbarCard}>
+          <View style={styles.toolbarCopy}>
+            <Text style={styles.toolbarTitle}>Poll board</Text>
+            <Text style={styles.toolbarText}>
+              Browse live polls here, then jump straight into creating a new one.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.createPollBtn}
+            onPress={openPollComposer}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={COLORS.text} />
+            <Text style={styles.createPollBtnText}>Create poll</Text>
+          </TouchableOpacity>
+        </View>
 
         {statusMessage && (
           <View style={styles.statusBanner}>
@@ -132,6 +189,23 @@ const PollScreen = () => {
             <Text style={styles.statusText}>{statusMessage}</Text>
           </View>
         )}
+
+        <View style={styles.insightCard}>
+          <View style={styles.insightColumn}>
+            <Text style={styles.insightLabel}>Lead</Text>
+            <Text style={styles.insightValue}>{pollInsight.leadLabel}</Text>
+          </View>
+          <View style={styles.insightColumn}>
+            <Text style={styles.insightLabel}>Turnout</Text>
+            <Text style={styles.insightValue}>{pollInsight.turnoutLabel}</Text>
+          </View>
+          <View style={styles.insightColumn}>
+            <Text style={styles.insightLabel}>Race</Text>
+            <Text style={styles.insightValue}>
+              {pollInsight.competitivenessLabel}
+            </Text>
+          </View>
+        </View>
 
         <ScrollView
           horizontal
@@ -163,6 +237,9 @@ const PollScreen = () => {
         {selectedPoll ? (
           <>
             <View style={styles.card}>
+              <Text style={styles.voteHint}>
+                Vote anonymously to reveal where the room is leaning.
+              </Text>
               {selectedPoll.pollOptions.map((option, index) => {
                 const count = Number(option.votes || 0);
                 const percent = totalVotes
@@ -232,6 +309,13 @@ const PollScreen = () => {
             <Text style={styles.emptySubtitle}>
               Create a post with poll options to start voting.
             </Text>
+            <TouchableOpacity
+              style={styles.emptyActionBtn}
+              onPress={openPollComposer}
+            >
+              <Ionicons name="add-outline" size={18} color={COLORS.text} />
+              <Text style={styles.emptyActionText}>Create your first poll</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -253,6 +337,44 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusText: { color: COLORS.text, flex: 1, ...TYPOGRAPHY.label },
+  toolbarCard: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  toolbarCopy: { gap: 4 },
+  toolbarTitle: { color: COLORS.text, ...TYPOGRAPHY.section },
+  toolbarText: { color: COLORS.gray, ...TYPOGRAPHY.label },
+  createPollBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: `${COLORS.primary}1F`,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}35`,
+    borderRadius: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  createPollBtnText: { color: COLORS.text, ...TYPOGRAPHY.label },
+  insightCard: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: "row",
+    gap: 12,
+  },
+  insightColumn: { flex: 1, gap: 4 },
+  insightLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  insightValue: { color: COLORS.text, ...TYPOGRAPHY.label },
   pollSelector: { gap: 10, paddingBottom: 14 },
   pollChip: {
     width: 210,
@@ -277,6 +399,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 12,
   },
+  voteHint: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginBottom: 2 },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -320,6 +443,19 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 8 },
   emptyTitle: { color: COLORS.text, ...TYPOGRAPHY.title },
   emptySubtitle: { color: COLORS.gray, ...TYPOGRAPHY.label },
+  emptyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    backgroundColor: `${COLORS.primary}20`,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}35`,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  emptyActionText: { color: COLORS.text, ...TYPOGRAPHY.label },
 });
 
 export default PollScreen;

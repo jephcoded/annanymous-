@@ -18,9 +18,7 @@ export const buildContentRecord = (
   overrides: Partial<DecentralizedPayload> = {},
 ): DecentralizedPayload => {
   const trimmed = content.trim();
-  const baseHash = trimmed
-    ? utils.keccak256(utils.toUtf8Bytes(trimmed))
-    : null;
+  const baseHash = trimmed ? utils.keccak256(utils.toUtf8Bytes(trimmed)) : null;
 
   return {
     contentCid: null,
@@ -28,7 +26,9 @@ export const buildContentRecord = (
     chainId: WEB3_CONFIG.chainId,
     contractAddress: normalizeContractAddress(),
     transactionHash: null,
-    syncStatus: normalizeContractAddress() ? "awaiting_anchor" : "offchain_only",
+    syncStatus: normalizeContractAddress()
+      ? "awaiting_anchor"
+      : "offchain_only",
     ...overrides,
   };
 };

@@ -1,5 +1,102 @@
 import { API_BASE_URL } from "../config/api";
 
+// Community chat message types
+export type CommunityMessage = {
+  id: number;
+  communityId: number;
+  userId: number;
+  sender: string;
+  message: string;
+  createdAt: string;
+};
+
+// Fetch messages for a community
+export const getCommunityMessages = async (
+  token: string,
+  communityId: number,
+) =>
+  request<{ data: CommunityMessage[] }>(
+    `/community-messages/${communityId}/messages`,
+    { token },
+  );
+
+// Send a message to a community
+export const sendCommunityMessage = async (
+  token: string,
+  payload: { communityId: number; message: string },
+) =>
+  request<{ data: CommunityMessage }>("/community-messages/send", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+// Community types
+export type Community = {
+  id: number;
+  name: string;
+  description?: string;
+  memberCount: number;
+  inviteCode: string;
+  status?: string;
+  isAdmin?: boolean;
+  createdAt?: string;
+};
+
+export type CommunityMember = {
+  id: number;
+  userId: number;
+  isAdmin: boolean;
+  status: string;
+};
+
+// Community API
+export const getCommunities = async (token: string) =>
+  request<{ data: Community[] }>("/communities", { token });
+
+export const createCommunity = async (
+  token: string,
+  payload: { name: string; description?: string },
+) => {
+  try {
+    return await request<{ data: Community }>("/communities/create", {
+      method: "POST",
+      token,
+      body: payload,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/Route not found|Request failed/i.test(message)) {
+      throw error;
+    }
+
+    return request<{ data: Community }>("/communities", {
+      method: "POST",
+      token,
+      body: payload,
+    });
+  }
+};
+
+export const createCommunityInvite = async (
+  token: string,
+  payload: { communityId: number; expiresAt?: string },
+) =>
+  request<{ data: { inviteCode: string } }>("/communities/invite", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+
+export const joinCommunityByInvite = async (
+  token: string,
+  inviteCode: string,
+) =>
+  request<{ data: CommunityMember }>("/communities/join", {
+    method: "POST",
+    token,
+    body: { inviteCode },
+  });
+
 export type DecentralizedRecord = {
   contentCid?: string | null;
   contentHash?: string | null;
@@ -15,9 +112,16 @@ export type FeedPost = {
   mediaUrl: string | null;
   createdAt: string;
   userId: number | null;
+  category: string;
+  hashtags: string[];
+  contentMode: "standard" | "confession" | "qna" | "story";
+  expiresAt: string | null;
+  campusTag: string | null;
+  cityTag: string | null;
   upVotes: number;
   downVotes: number;
   commentCount: number;
+  trendingScore: number;
   pollOptions: { id: number; label: string; votes: number }[];
   decentralized?: DecentralizedRecord | null;
 };
@@ -109,6 +213,12 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
 export const getFeed = async (params?: {
   limit?: number;
   pollsOnly?: boolean;
+  category?: string;
+  hashtag?: string;
+  campusTag?: string;
+  cityTag?: string;
+  contentMode?: string;
+  trending?: boolean;
 }) => {
   const query = new URLSearchParams();
   if (params?.limit) {
@@ -116,6 +226,24 @@ export const getFeed = async (params?: {
   }
   if (params?.pollsOnly) {
     query.set("pollsOnly", "true");
+  }
+  if (params?.category) {
+    query.set("category", params.category);
+  }
+  if (params?.hashtag) {
+    query.set("hashtag", params.hashtag);
+  }
+  if (params?.campusTag) {
+    query.set("campusTag", params.campusTag);
+  }
+  if (params?.cityTag) {
+    query.set("cityTag", params.cityTag);
+  }
+  if (params?.contentMode) {
+    query.set("contentMode", params.contentMode);
+  }
+  if (params?.trending) {
+    query.set("trending", "true");
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
@@ -128,6 +256,11 @@ export const createPost = async (
     body: string;
     mediaUrl?: string | null;
     pollOptions?: string[];
+    category?: string;
+    contentMode?: string;
+    expiresAt?: string | null;
+    campusTag?: string | null;
+    cityTag?: string | null;
     decentralized?: DecentralizedRecord;
   },
 ) =>
@@ -157,14 +290,11 @@ export const voteOnPost = async (
       downVotes: number;
       decentralized?: DecentralizedRecord;
     };
-  }>(
-    `/votes/posts/${postId}`,
-    {
-      method: "POST",
-      token,
-      body: { direction, decentralized },
-    },
-  );
+  }>(`/votes/posts/${postId}`, {
+    method: "POST",
+    token,
+    body: { direction, decentralized },
+  });
 
 export const voteOnPoll = async (
   token: string,
