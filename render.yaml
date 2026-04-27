@@ -27,3 +27,22 @@ services:
         sync: false
       - key: SOCIAL_CONTRACT_ADDRESS
         sync: false
+      - key: ADMIN_WALLETS
+        sync: false
+      - key: ADMIN_PANEL_EMAIL
+        sync: false
+      - key: ADMIN_PANEL_PASSWORD
+        sync: false
+
+  - type: web
+    name: ananymous-admin-dashboard
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm run admin:web
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: ADMIN_WEB_HOST
+        value: 0.0.0.0
+      - key: ADMIN_API_PROXY_BASE
+        value: https://annanymous-o8qp.onrender.com
