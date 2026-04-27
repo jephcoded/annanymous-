@@ -12,8 +12,18 @@ const commentRoutes = require("./routes/commentRoutes");
 const voteRoutes = require("./routes/voteRoutes");
 const authRoutes = require("./routes/authRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const notificationService = require("./services/notificationService");
+
+const isLocalOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    return ["127.0.0.1", "localhost"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+};
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "*")
   .split(",")
@@ -25,7 +35,8 @@ const corsOptions = {
     if (
       !origin ||
       allowedOrigins.includes("*") ||
-      allowedOrigins.includes(origin)
+      allowedOrigins.includes(origin) ||
+      isLocalOrigin(origin)
     ) {
       callback(null, true);
       return;
@@ -33,7 +44,7 @@ const corsOptions = {
 
     callback(new Error("CORS origin not allowed"));
   },
-  methods: ["GET", "POST", "PATCH"],
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
 };
 
@@ -84,6 +95,7 @@ app.use("/api/v1/posts", postRoutes);
 app.use("/api/v1/comments", commentRoutes);
 app.use("/api/v1/votes", voteRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/communities", communityRoutes);
 app.use("/api/v1/community-messages", communityMessageRoutes);

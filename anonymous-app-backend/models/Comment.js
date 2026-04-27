@@ -3,20 +3,23 @@ const db = require("../config/db");
 exports.listByPost = async (postId, cursor, limit = 30) => {
   const params = [postId];
   let query = `SELECT
-    id,
-    post_id AS "postId",
-    user_id AS "userId",
-    message,
+    c.id,
+    c.post_id AS "postId",
+    c.user_id AS "userId",
+    u.display_name AS "authorName",
+    c.message,
     json_build_object(
-      'contentCid', content_cid,
-      'contentHash', content_hash,
-      'chainId', chain_id,
-      'contractAddress', contract_address,
-      'transactionHash', transaction_hash,
-      'syncStatus', sync_status
+      'contentCid', c.content_cid,
+      'contentHash', c.content_hash,
+      'chainId', c.chain_id,
+      'contractAddress', c.contract_address,
+      'transactionHash', c.transaction_hash,
+      'syncStatus', c.sync_status
     ) AS decentralized,
-    created_at AS "createdAt"
-  FROM comments WHERE post_id = $1`;
+    c.created_at AS "createdAt"
+  FROM comments c
+  LEFT JOIN users u ON u.id = c.user_id
+  WHERE c.post_id = $1`;
   if (cursor) {
     params.push(cursor);
     query += ` AND id < $${params.length}`;
@@ -33,6 +36,7 @@ exports.listRecent = async (limit = 30) => {
        c.id,
        c.post_id AS "postId",
        c.user_id AS "userId",
+       u.display_name AS "authorName",
        c.message,
        json_build_object(
          'contentCid', c.content_cid,
@@ -46,6 +50,8 @@ exports.listRecent = async (limit = 30) => {
        LEFT(p.body, 72) AS "postPreview"
      FROM comments c
      INNER JOIN posts p ON p.id = c.post_id
+     LEFT JOIN users u ON u.id = c.user_id
+     WHERE p.deleted_at IS NULL
      ORDER BY c.id DESC
      LIMIT $1`,
     [limit],
@@ -90,6 +96,7 @@ exports.create = async ({ postId, message, userId, decentralized = {} }) => {
        id,
        post_id AS "postId",
        user_id AS "userId",
+       (SELECT display_name FROM users WHERE id = comments.user_id) AS "authorName",
        message,
        json_build_object(
          'contentCid', content_cid,
