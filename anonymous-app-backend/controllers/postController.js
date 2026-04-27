@@ -5,11 +5,28 @@ const formatCursor = (rows) => (rows.length ? rows[rows.length - 1].id : null);
 
 exports.listFeed = async (req, res, next) => {
   try {
-    const { cursor, limit, pollsOnly } = req.query;
+    const {
+      cursor,
+      limit,
+      pollsOnly,
+      category,
+      hashtag,
+      campusTag,
+      cityTag,
+      contentMode,
+      trending,
+    } = req.query;
     const posts = await Post.list({
       cursor,
       limit: Number(limit) || 20,
       pollsOnly: pollsOnly === "true",
+      category,
+      hashtag,
+      campusTag,
+      cityTag,
+      contentMode,
+      trending: trending === "true",
+      userId: req.user?.id || null,
     });
     res.json({
       data: posts,
@@ -29,6 +46,11 @@ exports.createPost = async (req, res, next) => {
       body: req.body.body,
       mediaUrl: req.body.mediaUrl,
       pollOptions: req.body.pollOptions,
+      category: req.body.category,
+      contentMode: req.body.contentMode,
+      expiresAt: req.body.expiresAt,
+      campusTag: req.body.campusTag,
+      cityTag: req.body.cityTag,
       decentralized: req.body.decentralized,
       userId: req.user?.id,
     };
@@ -42,7 +64,7 @@ exports.createPost = async (req, res, next) => {
 
 exports.getPost = async (req, res, next) => {
   try {
-    const post = await Post.findById(req.params.postId);
+    const post = await Post.findById(req.params.postId, req.user?.id || null);
     if (!post) {
       return res.status(404).json({
         error: {
@@ -70,8 +92,22 @@ exports.flagPost = async (req, res, next) => {
       });
     }
 
-    await Post.flag(req.params.postId, req.body.reason);
+    await Post.flag(req.params.postId, req.body.reason, req.user?.id || null);
     res.json({ message: "Post queued for review" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deletePost = async (req, res, next) => {
+  try {
+    const deleted = await Post.delete({
+      postId: req.params.postId,
+      userId: req.user?.id,
+      reason: req.body?.reason,
+    });
+
+    res.json({ data: deleted });
   } catch (error) {
     next(error);
   }
