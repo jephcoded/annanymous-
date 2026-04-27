@@ -24,14 +24,21 @@ const buildListQuery = ({
   cityTag,
   contentMode,
   trending = false,
+  userId,
 }) => {
   const params = [];
+  const currentUserIdExpression = userId ? `$${params.push(userId)}` : "NULL";
   let query = `SELECT
     p.id,
     p.body,
     p.media_url AS "mediaUrl",
     p.created_at AS "createdAt",
     p.user_id AS "userId",
+    u.display_name AS "authorName",
+    CASE
+      WHEN ${currentUserIdExpression} IS NULL THEN FALSE
+      ELSE p.user_id = ${currentUserIdExpression}
+    END AS "isOwner",
     p.category,
     p.hashtags,
     p.content_mode AS "contentMode",
@@ -48,6 +55,7 @@ const buildListQuery = ({
     ) AS decentralized,
     COALESCE(v.upvotes, 0)::int AS "upVotes",
     COALESCE(v.downvotes, 0)::int AS "downVotes",
+    uv.direction AS "userVote",
     COALESCE(c.comment_count, 0)::int AS "commentCount",
     COALESCE(po.poll_options, '[]'::json) AS "pollOptions",
     GREATEST(
@@ -68,6 +76,7 @@ const buildListQuery = ({
     FROM votes
     GROUP BY post_id
   ) v ON v.post_id = p.id
+  LEFT JOIN votes uv ON uv.post_id = p.id AND uv.user_id = ${currentUserIdExpression}
   LEFT JOIN (
     SELECT post_id, COUNT(*) AS comment_count
     FROM comments
@@ -92,8 +101,10 @@ const buildListQuery = ({
     ) pv ON pv.option_id = po.id
     GROUP BY po.post_id
   ) po ON po.post_id = p.id`;
+  query += ` LEFT JOIN users u ON u.id = p.user_id`;
 
   const filters = [];
+  filters.push("p.deleted_at IS NULL");
   filters.push("(p.expires_at IS NULL OR p.expires_at > NOW())");
 
   if (postId) {
@@ -150,6 +161,7 @@ exports.list = async ({
   cityTag,
   contentMode,
   trending = false,
+  userId = null,
 }) => {
   const { query, params } = buildListQuery({
     cursor,
@@ -161,6 +173,7 @@ exports.list = async ({
     cityTag,
     contentMode,
     trending,
+    userId,
   });
   const result = await db.query(query, params);
   return result.rows;
@@ -272,18 +285,61 @@ exports.create = async ({
       ),
     );
   }
-  return exports.findById(post.id);
+  return exports.findById(post.id, userId);
 };
 
-exports.findById = async (id) => {
-  const { query, params } = buildListQuery({ postId: id, limit: 1 });
+exports.findById = async (id, userId = null) => {
+  const { query, params } = buildListQuery({ postId: id, limit: 1, userId });
   const result = await db.query(query, params);
   return result.rows[0] || null;
 };
 
-exports.flag = async (postId, reason) => {
-  await db.query("INSERT INTO post_flags (post_id, reason) VALUES ($1, $2)", [
-    postId,
-    reason,
-  ]);
+exports.delete = async ({ postId, userId, reason = null }) => {
+  const result = await db.query(
+    `UPDATE posts
+     SET deleted_at = NOW(),
+         deleted_by = $2,
+         delete_reason = $3
+     WHERE id = $1
+       AND user_id = $2
+       AND deleted_at IS NULL
+     RETURNING id`,
+    [postId, userId, reason?.trim() || null],
+  );
+
+  if (result.rows.length) {
+    return result.rows[0];
+  }
+
+  const existing = await db.query(
+    `SELECT id, user_id AS "userId", deleted_at AS "deletedAt"
+     FROM posts
+     WHERE id = $1
+     LIMIT 1`,
+    [postId],
+  );
+
+  if (!existing.rows.length || existing.rows[0].deletedAt) {
+    const error = new Error("Post does not exist");
+    error.status = 404;
+    error.code = "POST_NOT_FOUND";
+    throw error;
+  }
+
+  if (existing.rows[0].userId !== userId) {
+    const error = new Error("You can only delete your own posts");
+    error.status = 403;
+    error.code = "POST_DELETE_FORBIDDEN";
+    throw error;
+  }
+
+  return { id: postId };
+};
+
+exports.flag = async (postId, reason, reporterUserId = null) => {
+  await db.query(
+    `INSERT INTO post_flags (post_id, reason, reporter_user_id)
+     VALUES ($1, $2, $3)`,
+    [postId, reason, reporterUserId],
+  );
 };
