@@ -3,6 +3,8 @@ const helpers = require("../utils/helpers");
 const User = require("../models/User");
 const { isAdminWallet } = require("../utils/admin");
 
+const USER_SESSION_TTL = process.env.USER_SESSION_TTL || "365d";
+
 const signUserToken = (user) =>
   jwt.sign(
     {
@@ -12,7 +14,7 @@ const signUserToken = (user) =>
       authType: user.auth_type || "wallet",
     },
     process.env.JWT_SECRET,
-    { expiresIn: "30d" },
+    { expiresIn: USER_SESSION_TTL },
   );
 
 const sanitizeUser = (user) => ({
