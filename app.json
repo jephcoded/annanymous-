@@ -1,18 +1,20 @@
 {
   "expo": {
-    "name": "ananymous",
+    "name": "ANON",
     "slug": "ananymous",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ananymous",
+    "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 3,
       "adaptiveIcon": {
-        "backgroundColor": "#050505",
+        "backgroundColor": "#050B12",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,12 +30,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#050505",
+          "backgroundColor": "#050B12",
           "dark": {
-            "backgroundColor": "#050505"
+            "backgroundColor": "#050B12"
           }
         }
       ]
@@ -43,6 +45,7 @@
       "reactCompiler": true
     },
     "extra": {
+      "apiBaseUrl": "https://annanymous-o8qp.onrender.com/api/v1",
       "reownProjectId": "e3a7c35ef9f68a67eb416c493e019754",
       "eas": {
         "projectId": "864a4a32-869c-4525-8aa7-e1ff02870a61"
