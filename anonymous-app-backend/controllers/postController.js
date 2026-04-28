@@ -1,4 +1,5 @@
 const Post = require("../models/Post");
+const pushService = require("../services/pushService");
 const trendingService = require("../services/trendingService");
 
 const formatCursor = (rows) => (rows.length ? rows[rows.length - 1].id : null);
@@ -56,6 +57,16 @@ exports.createPost = async (req, res, next) => {
     };
     const post = await Post.create(payload);
     trendingService.enqueue(post.id);
+
+    void pushService
+      .notifyNewPost({
+        post,
+        actorUserId: req.user?.id || null,
+      })
+      .catch((notificationError) => {
+        console.error("Push fanout failed for new post", notificationError);
+      });
+
     res.status(201).json({ data: post });
   } catch (error) {
     next(error);

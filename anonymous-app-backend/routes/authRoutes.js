@@ -10,5 +10,10 @@ router.get("/me", authMiddleware, authController.me);
 router.patch("/profile", authMiddleware, authController.updateProfile);
 router.get("/settings", authMiddleware, authController.getSettings);
 router.patch("/settings", authMiddleware, authController.updateSettings);
+router.post(
+	"/settings/push-token",
+	authMiddleware,
+	authController.registerPushToken,
+);
 
 module.exports = router;

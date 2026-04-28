@@ -1,6 +1,7 @@
 // CommunityMessage controller for sending and fetching messages
 const CommunityMessage = require("../models/CommunityMessage");
 const Community = require("../models/Community");
+const pushService = require("../services/pushService");
 
 exports.sendMessage = async (req, res, next) => {
   try {
@@ -17,6 +18,24 @@ exports.sendMessage = async (req, res, next) => {
       userId,
       message,
     });
+
+    const community = await Community.getById(communityId);
+
+    void pushService
+      .notifyCommunityMessage({
+        communityId,
+        communityName: community?.name || null,
+        messageId: msg.id,
+        messagePreview: message,
+        actorUserId: userId,
+      })
+      .catch((notificationError) => {
+        console.error(
+          "Push fanout failed for community message",
+          notificationError,
+        );
+      });
+
     res.status(201).json({ data: msg });
   } catch (error) {
     next(error);

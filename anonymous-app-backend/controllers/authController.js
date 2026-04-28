@@ -215,6 +215,33 @@ exports.updateSettings = async (req, res, next) => {
   }
 };
 
+exports.registerPushToken = async (req, res, next) => {
+  try {
+    const pushToken = String(req.body?.pushToken || "").trim();
+    const pushPlatform = String(req.body?.pushPlatform || "").trim();
+
+    if (!/^Expo(nent)?PushToken\[.+\]$/.test(pushToken)) {
+      return res.status(400).json({
+        error: {
+          code: "PUSH_TOKEN_INVALID",
+          message: "A valid Expo push token is required",
+          status: 400,
+        },
+      });
+    }
+
+    const registration = await User.registerPushToken({
+      userId: req.user.id,
+      pushToken,
+      platform: pushPlatform || null,
+    });
+
+    res.json({ data: registration });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.updateProfile = async (req, res, next) => {
   try {
     const profile = await User.updateProfile(req.user.id, req.body || {});

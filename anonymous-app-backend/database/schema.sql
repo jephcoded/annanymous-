@@ -266,6 +266,16 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_push_tokens (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expo_push_token TEXT NOT NULL UNIQUE,
+  platform TEXT,
+  disabled_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Helpful indexes for scrolling feeds + joins
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at);
@@ -279,4 +289,5 @@ CREATE INDEX IF NOT EXISTS idx_users_banned ON users(is_banned, banned_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_auth_type ON users(auth_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_push_tokens_user ON user_push_tokens(user_id, disabled_at, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_members_active ON admin_members(is_active, role, created_at DESC);

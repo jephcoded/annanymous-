@@ -1,6 +1,7 @@
 const db = require("../config/db");
 
 let settingsSchemaReady = false;
+let pushTokenSchemaReady = false;
 
 const ensureSettingsSchema = async () => {
   if (settingsSchemaReady) {
@@ -12,6 +13,29 @@ const ensureSettingsSchema = async () => {
   );
 
   settingsSchemaReady = true;
+};
+
+const ensurePushTokenSchema = async () => {
+  if (pushTokenSchemaReady) {
+    return;
+  }
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS user_push_tokens (
+       id BIGSERIAL PRIMARY KEY,
+       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       expo_push_token TEXT NOT NULL UNIQUE,
+       platform TEXT,
+       disabled_at TIMESTAMPTZ,
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  );
+  await db.query(
+    "CREATE INDEX IF NOT EXISTS idx_user_push_tokens_user ON user_push_tokens(user_id, disabled_at, last_seen_at DESC)",
+  );
+
+  pushTokenSchemaReady = true;
 };
 const {
   hashPassword,
@@ -262,3 +286,40 @@ exports.updateSettings = async (userId, settings) => {
 
   return result.rows[0];
 };
+
+exports.registerPushToken = async ({ userId, pushToken, platform }) => {
+  await ensureSettingsSchema();
+  await ensurePushTokenSchema();
+
+  await db.query(
+    "INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
+    [userId],
+  );
+
+  const result = await db.query(
+    `INSERT INTO user_push_tokens (
+       user_id,
+       expo_push_token,
+       platform,
+       disabled_at,
+       last_seen_at
+     ) VALUES ($1, $2, $3, NULL, NOW())
+     ON CONFLICT (expo_push_token) DO UPDATE SET
+       user_id = EXCLUDED.user_id,
+       platform = EXCLUDED.platform,
+       disabled_at = NULL,
+       last_seen_at = NOW()
+     RETURNING
+       id,
+       user_id AS "userId",
+       expo_push_token AS "pushToken",
+       platform,
+       disabled_at AS "disabledAt",
+       last_seen_at AS "lastSeenAt"`,
+    [userId, pushToken, platform || null],
+  );
+
+  return result.rows[0] || null;
+};
+
+exports.ensurePushTokenSchema = ensurePushTokenSchema;
