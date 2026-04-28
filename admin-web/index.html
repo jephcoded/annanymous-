@@ -1,0 +1,1888 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ananymous Admin</title>
+  <style>
+    :root {
+      --bg: #07111d;
+      --bg-alt: #0d1a2c;
+      --panel: rgba(14, 24, 42, 0.92);
+      --panel-strong: rgba(19, 31, 54, 0.98);
+      --stroke: rgba(162, 176, 204, 0.16);
+      --text: #eef4ff;
+      --muted: #93a6c8;
+      --blue: #5b7cff;
+      --green: #42c591;
+      --red: #ff675c;
+      --amber: #ffbd70;
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: radial-gradient(circle at top right, rgba(91,124,255,0.2), transparent 28%), radial-gradient(circle at bottom left, rgba(66,197,145,0.14), transparent 24%), var(--bg); color: var(--text); font-family: "Segoe UI", Arial, sans-serif; }
+    body { padding: 24px; }
+    button, input, select, textarea { font: inherit; }
+    button { color: inherit; }
+    a { color: inherit; }
+
+    .shell { max-width: 1480px; margin: 0 auto; display: grid; gap: 18px; }
+    .topbar, .panel, .sidebar, .status-card, .toolbar { backdrop-filter: blur(18px); box-shadow: var(--shadow); }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 20px; border: 1px solid var(--stroke); border-radius: 24px; background: linear-gradient(135deg, rgba(22,34,61,0.96), rgba(12,18,34,0.94)); }
+    .headline { display: grid; gap: 6px; }
+    .eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; font-size: 11px; }
+    .title { font-size: 32px; font-weight: 800; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn { border: 1px solid var(--stroke); border-radius: 14px; padding: 11px 15px; background: rgba(255,255,255,0.04); color: var(--text); cursor: pointer; transition: transform 140ms ease, border-color 140ms ease, background 140ms ease; }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(162, 176, 204, 0.28); }
+    .btn.primary { background: linear-gradient(135deg, rgba(91,124,255,0.22), rgba(91,124,255,0.14)); }
+    .btn.danger { background: rgba(255,103,92,0.16); border-color: rgba(255,103,92,0.24); }
+    .btn.success { background: rgba(66,197,145,0.16); border-color: rgba(66,197,145,0.24); }
+    .btn.ghost { background: transparent; }
+
+    .banner {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      z-index: 80;
+      width: min(420px, calc(100vw - 32px));
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 22px;
+      border: 1px solid rgba(162, 176, 204, 0.18);
+      background: linear-gradient(180deg, rgba(17, 27, 48, 0.98), rgba(10, 16, 31, 0.98));
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-12px) scale(0.98);
+      transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+      overflow: hidden;
+    }
+    .banner::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg, rgba(91,124,255,0.2), rgba(91,124,255,0.95));
+    }
+    .banner.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+    }
+    .banner.success {
+      border-color: rgba(66,197,145,0.26);
+      background: linear-gradient(180deg, rgba(10, 37, 34, 0.98), rgba(9, 18, 28, 0.98));
+    }
+    .banner.success::after {
+      background: linear-gradient(90deg, rgba(66,197,145,0.2), rgba(66,197,145,0.95));
+    }
+    .banner.error {
+      border-color: rgba(255,103,92,0.28);
+      background: linear-gradient(180deg, rgba(42, 18, 24, 0.98), rgba(16, 10, 20, 0.98));
+    }
+    .banner.error::after {
+      background: linear-gradient(90deg, rgba(255,103,92,0.2), rgba(255,103,92,0.95));
+    }
+    .banner.info::after {
+      background: linear-gradient(90deg, rgba(91,124,255,0.2), rgba(91,124,255,0.95));
+    }
+    .auth-shell { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 24px; background: rgba(4, 9, 19, 0.78); backdrop-filter: blur(18px); }
+    .auth-shell.show { display: grid; }
+    .auth-card { width: min(480px, 100%); padding: 24px; border-radius: 28px; border: 1px solid var(--stroke); background: linear-gradient(180deg, rgba(20,31,54,0.98), rgba(10,16,31,0.98)); box-shadow: var(--shadow); display: grid; gap: 16px; }
+    .auth-title { font-size: 28px; font-weight: 800; }
+    .auth-note { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .auth-grid { display: grid; gap: 12px; }
+    .auth-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .badge {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      border: 1px solid rgba(162, 176, 204, 0.16);
+      background: rgba(255,255,255,0.06);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      flex-shrink: 0;
+    }
+    .badge.error { background: rgba(255,103,92,0.14); color: #ffd0cc; }
+    .badge.success { background: rgba(66,197,145,0.14); color: #baf2db; }
+    .badge.info { background: rgba(91,124,255,0.14); color: #d7e0ff; }
+    .banner-copy { display: grid; gap: 4px; min-width: 0; padding-top: 2px; }
+    .banner-title { font-size: 14px; font-weight: 800; letter-spacing: 0.03em; }
+    .banner-text { color: var(--muted); font-size: 13px; line-height: 1.45; word-break: break-word; }
+    .banner-close {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      border: 1px solid rgba(162, 176, 204, 0.12);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      pointer-events: auto;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+    }
+    .banner-close:hover {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border-color: rgba(162, 176, 204, 0.24);
+    }
+
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; }
+    .sidebar { padding: 18px; border-radius: 28px; border: 1px solid var(--stroke); background: linear-gradient(180deg, rgba(20,31,54,0.98), rgba(10,16,31,0.98)); }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .brand-mark { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 14px; background: rgba(255,255,255,0.08); font-size: 11px; font-weight: 800; letter-spacing: 0.14em; }
+    .nav { display: grid; gap: 8px; }
+    .nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid transparent; background: rgba(255,255,255,0.03); color: var(--muted); cursor: pointer; text-align: left; }
+    .nav-item.active { color: var(--text); background: rgba(91,124,255,0.16); border-color: rgba(120,146,255,0.18); }
+    .glyph { min-width: 30px; text-align: center; border-radius: 999px; padding: 6px 8px; background: rgba(255,255,255,0.06); font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
+    .sidebar-meta { margin-top: 18px; padding: 14px; border-radius: 18px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); color: var(--muted); font-size: 12px; display: grid; gap: 10px; word-break: break-all; }
+    .meta-row { display: grid; gap: 4px; }
+    .meta-key { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .meta-value { color: var(--text); }
+
+    .content { display: grid; gap: 18px; }
+    .config-bar { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 12px; }
+    .toolbar { display: flex; justify-content: space-between; gap: 14px; align-items: center; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--stroke); border-radius: 22px; background: rgba(255,255,255,0.04); }
+    .toolbar-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .field { display: grid; gap: 8px; }
+    .label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .input, .select, .textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--stroke); background: rgba(255,255,255,0.04); color: var(--text); }
+    .select { min-width: 170px; }
+    .textarea { min-height: 120px; resize: vertical; }
+    .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { border: 1px solid var(--stroke); border-radius: 999px; padding: 9px 12px; background: rgba(255,255,255,0.03); color: var(--muted); cursor: pointer; }
+    .chip.active { color: var(--text); border-color: rgba(120,146,255,0.28); background: rgba(91,124,255,0.15); }
+    .app-link { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+    .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+    .switch input { accent-color: var(--blue); }
+
+    .status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .status-card { padding: 16px; border-radius: 22px; border: 1px solid var(--stroke); background: var(--panel-strong); display: grid; gap: 10px; }
+    .status-title { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .status-value { font-size: 24px; font-weight: 800; }
+    .status-note { color: var(--muted); font-size: 13px; }
+    .status-stack { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-pill { padding: 7px 10px; border-radius: 999px; background: rgba(255,255,255,0.05); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .trend-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.9fr); gap: 18px; }
+    .trend-chart { min-height: 250px; border: 1px solid rgba(162,176,204,0.1); border-radius: 20px; padding: 14px; background: rgba(255,255,255,0.02); }
+    .trend-svg { width: 100%; height: 220px; display: block; }
+    .trend-grid-line { stroke: rgba(162,176,204,0.12); stroke-width: 1; }
+    .trend-axis-label { fill: var(--muted); font-size: 11px; }
+    .trend-line { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .trend-area { fill: rgba(91,124,255,0.16); }
+    .trend-point { fill: #cdd8ff; stroke: rgba(91,124,255,0.55); stroke-width: 2; }
+    .trend-summary { display: grid; gap: 12px; }
+    .trend-legend { display: flex; gap: 8px; flex-wrap: wrap; }
+    .legend-chip { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 11px; background: rgba(255,255,255,0.04); color: var(--muted); font-size: 12px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+    .trend-bars { display: grid; gap: 10px; }
+    .trend-bar-row { display: grid; gap: 6px; }
+    .trend-bar-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
+    .trend-bar-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+    .trend-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(66,197,145,0.9), rgba(91,124,255,0.9)); }
+    .helper-stack { display: grid; gap: 12px; }
+    .helper-card { border: 1px solid rgba(162,176,204,0.1); border-radius: 18px; padding: 14px; background: rgba(255,255,255,0.03); display: grid; gap: 8px; }
+    .helper-title { font-size: 15px; font-weight: 700; }
+    .helper-step { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .helper-step strong { color: var(--text); }
+
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .stat { padding: 16px; border-radius: 22px; border: 1px solid var(--stroke); background: var(--panel-strong); display: grid; gap: 12px; }
+    .stat-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .stat-label { color: var(--muted); font-size: 12px; }
+    .stat-glyph { min-width: 32px; text-align: center; border-radius: 999px; padding: 7px 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
+    .stat-value { font-size: 34px; font-weight: 800; }
+    .stat-note { color: var(--muted); font-size: 12px; }
+
+    .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 18px; }
+    .stack { display: grid; gap: 18px; }
+    .double { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .panel { padding: 18px; border-radius: 26px; border: 1px solid var(--stroke); background: var(--panel); }
+    .panel.hidden { display: none; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .panel-title { font-size: 18px; font-weight: 700; }
+    .panel-meta { color: var(--muted); font-size: 12px; }
+    .list { display: grid; gap: 10px; }
+    .item { display: flex; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(162,176,204,0.1); }
+    .item:last-child { border-bottom: 0; }
+    .item-main { min-width: 0; display: grid; gap: 5px; }
+    .item-title { font-weight: 700; }
+    .item-body { color: var(--muted); font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .item-meta { color: var(--muted); font-size: 11px; }
+    .item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: start; }
+    .mini { border-radius: 10px; padding: 8px 11px; font-size: 12px; }
+    .mini.secondary { background: rgba(255,255,255,0.03); }
+
+    .search-wrap { display: grid; gap: 12px; }
+    .user-list, .banned-list { display: grid; gap: 8px; }
+    .user { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; border: 1px solid transparent; background: rgba(255,255,255,0.04); cursor: pointer; }
+    .user.active { border-color: rgba(120,146,255,0.26); background: rgba(91,124,255,0.14); }
+    .pill { border-radius: 999px; padding: 6px 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; }
+    .pill.danger { background: rgba(255,103,92,0.18); }
+    .pill.neutral { background: rgba(255,255,255,0.08); }
+
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .detail { padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.04); }
+    .detail-label { color: var(--muted); font-size: 11px; }
+    .detail-value { margin-top: 8px; font-size: 22px; font-weight: 800; }
+    .warning { margin-top: 12px; padding: 12px; border-radius: 14px; background: rgba(255,103,92,0.12); border: 1px solid rgba(255,103,92,0.22); }
+    .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+    .mono { font-family: Consolas, "Courier New", monospace; }
+
+    .modal-shell { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; background: rgba(2, 7, 16, 0.72); }
+    .modal-shell.show { display: grid; }
+    .modal { width: min(560px, 100%); border: 1px solid var(--stroke); border-radius: 24px; background: linear-gradient(180deg, rgba(20,31,54,0.98), rgba(10,16,31,0.98)); box-shadow: var(--shadow); padding: 18px; display: grid; gap: 14px; }
+    .modal-head { display: grid; gap: 6px; }
+    .modal-title { font-size: 22px; font-weight: 800; }
+    .modal-note { color: var(--muted); font-size: 14px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    @media (max-width: 1180px) {
+      .layout, .grid, .double { grid-template-columns: 1fr; }
+      .stats, .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .trend-layout { grid-template-columns: 1fr; }
+      .config-bar { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      body { padding: 16px; }
+      .banner { top: 16px; right: 16px; width: calc(100vw - 32px); }
+      .topbar { padding: 16px; align-items: start; flex-direction: column; }
+      .stats, .status-grid, .detail-grid { grid-template-columns: 1fr; }
+      .toolbar { align-items: start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="headline">
+        <div class="eyebrow">Anonymous Admin</div>
+        <div class="title">Moderation Console</div>
+        <div class="subtitle" id="sessionLabel">Standalone admin page connected to your backend.</div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="refreshButton">Refresh</button>
+        <button class="btn ghost" id="exportButton">Export Snapshot</button>
+        <a class="btn ghost app-link" href="ananymous://home">Open App</a>
+        <button class="btn primary" id="connectButton">Wallet Login</button>
+        <button class="btn" id="disconnectButton" hidden>Sign Out</button>
+      </div>
+    </div>
+
+    <div class="auth-shell" id="authShell">
+      <div class="auth-card">
+        <div class="eyebrow">Admin Sign In</div>
+        <div class="auth-title">Authenticate before opening the dashboard</div>
+        <div class="auth-note">Use your admin email and password, or connect an approved admin wallet. The moderation console stays locked until one of these sign-in methods succeeds.</div>
+        <div class="auth-grid">
+          <label class="field">
+            <span class="label">Admin Email</span>
+            <input class="input" id="authEmailInput" type="email" autocomplete="username" placeholder="admin@example.com">
+          </label>
+          <label class="field">
+            <span class="label">Password</span>
+            <input class="input" id="authPasswordInput" type="password" autocomplete="current-password" placeholder="Enter admin password">
+          </label>
+        </div>
+        <div class="auth-actions">
+          <button class="btn primary" id="passwordLoginButton">Sign In</button>
+          <button class="btn" id="walletLoginButton">Connect Wallet Instead</button>
+        </div>
+        <div class="auth-note" id="authHintText">If wallet login is used, the wallet must still be listed as an admin on the backend.</div>
+      </div>
+    </div>
+
+    <div class="banner info" id="banner" role="status" aria-live="polite" aria-atomic="true">
+      <div class="badge info" id="bannerBadge">FYI</div>
+      <div class="banner-copy">
+        <div class="banner-title" id="bannerTitle">Notice</div>
+        <div class="banner-text" id="bannerText"></div>
+      </div>
+      <button class="banner-close" id="bannerCloseButton" type="button" aria-label="Dismiss notification">x</button>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AD</div>
+          <div>
+            <div class="item-title">Ananymous Admin</div>
+            <div class="item-meta">Direct browser panel</div>
+          </div>
+        </div>
+
+        <div class="nav" id="sideNav">
+          <button class="nav-item active" data-view="overview"><div class="glyph">DB</div><div>Overview</div></button>
+          <button class="nav-item" data-view="users"><div class="glyph">US</div><div>Users</div></button>
+          <button class="nav-item" id="adminMembersNav" data-view="admins" hidden><div class="glyph">AD</div><div>Admins</div></button>
+          <button class="nav-item" data-view="posts"><div class="glyph">PT</div><div>Posts</div></button>
+          <button class="nav-item" data-view="reports"><div class="glyph">RP</div><div>Reports</div></button>
+          <button class="nav-item" data-view="activity"><div class="glyph">LG</div><div>Activity</div></button>
+        </div>
+
+        <div class="sidebar-meta">
+          <div class="meta-row">
+            <div class="meta-key">API Base</div>
+            <div class="meta-value mono" id="apiOriginText">https://annanymous.onrender.com/api/v1</div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-key">Connection</div>
+            <div class="meta-value" id="connectionStatusText">Disconnected</div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-key">Admin Access</div>
+            <div class="meta-value" id="adminStatusText">Unknown</div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-key">Last Synced</div>
+            <div class="meta-value" id="lastUpdatedText">Never</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div class="config-bar">
+          <label class="field">
+            <span class="label">API Base URL</span>
+            <input class="input mono" id="apiBaseInput" value="https://annanymous.onrender.com/api/v1">
+          </label>
+          <label class="field">
+            <span class="label">Search Users</span>
+            <input class="input" id="searchInput" placeholder="wallet or display name">
+          </label>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <label class="switch">
+              <input type="checkbox" id="autoRefreshToggle">
+              <span>Auto refresh</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="bannedOnlyToggle">
+              <span>Banned only</span>
+            </label>
+            <select class="select" id="userSortSelect">
+              <option value="recent">Sort users: newest</option>
+              <option value="posts">Sort users: most posts</option>
+              <option value="comments">Sort users: most comments</option>
+              <option value="banned">Sort users: banned first</option>
+            </select>
+          </div>
+          <div class="toolbar-group">
+            <a class="btn mini secondary app-link" href="ananymous://home">Home</a>
+            <a class="btn mini secondary app-link" href="ananymous://discover">Discover</a>
+            <a class="btn mini secondary app-link" href="ananymous://post">Post</a>
+            <a class="btn mini secondary app-link" href="ananymous://post/polls">Polls</a>
+            <a class="btn mini secondary app-link" href="ananymous://communities">Communities</a>
+            <a class="btn mini secondary app-link" href="ananymous://wallet">Wallet</a>
+          </div>
+        </div>
+
+        <section class="status-grid">
+          <div class="status-card">
+            <div class="status-title">Session</div>
+            <div class="status-value" id="sessionStateValue">Idle</div>
+            <div class="status-note" id="sessionStateNote">Connect an admin wallet to begin moderation.</div>
+          </div>
+          <div class="status-card">
+            <div class="status-title">Sync</div>
+            <div class="status-value" id="syncStateValue">Manual</div>
+            <div class="status-note" id="syncStateNote">Auto refresh is currently off.</div>
+          </div>
+          <div class="status-card">
+            <div class="status-title">Queue</div>
+            <div class="status-value" id="queueStateValue">0</div>
+            <div class="status-stack" id="queueStatePills"></div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="overview activity">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">Trend Graphs</div>
+              <div class="panel-meta" id="trendMeta">Last 14 days of real backend activity</div>
+            </div>
+            <div class="toolbar-group">
+              <select class="select" id="trendDaysSelect">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30">Last 30 days</option>
+              </select>
+            </div>
+          </div>
+          <div class="trend-layout">
+            <div class="trend-summary">
+              <div class="trend-chart" id="trendChart"></div>
+              <div class="trend-legend" id="trendTotals"></div>
+            </div>
+            <div class="helper-stack">
+              <div class="helper-card">
+                <div class="helper-title">Category Spread</div>
+                <div class="trend-bars" id="trendCategories"></div>
+              </div>
+              <div class="helper-card">
+                <div class="helper-title">Wallet Setup</div>
+                <div id="walletHelp"></div>
+              </div>
+              <div class="helper-card">
+                <div class="helper-title">Trending Posts</div>
+                <div class="list" id="trendingPostsList"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="stats" id="statsGrid">
+          <div class="stat"><div class="stat-top"><div class="stat-label">Total Users</div><div class="stat-glyph" style="background: rgba(91,124,255,0.16); color: var(--blue);">US</div></div><div class="stat-value">-</div><div class="stat-note">Registered wallets</div></div>
+          <div class="stat"><div class="stat-top"><div class="stat-label">Active Posts</div><div class="stat-glyph" style="background: rgba(66,197,145,0.16); color: var(--green);">PS</div></div><div class="stat-value">-</div><div class="stat-note">Visible to app users</div></div>
+          <div class="stat"><div class="stat-top"><div class="stat-label">Reported Posts</div><div class="stat-glyph" style="background: rgba(255,103,92,0.16); color: var(--red);">RP</div></div><div class="stat-value">-</div><div class="stat-note">Need moderation action</div></div>
+          <div class="stat"><div class="stat-top"><div class="stat-label">Banned Users</div><div class="stat-glyph" style="background: rgba(255,189,112,0.16); color: var(--amber);">BN</div></div><div class="stat-value">-</div><div class="stat-note">Restricted accounts</div></div>
+        </section>
+
+        <div class="grid">
+          <div class="stack">
+            <section class="panel" data-panel="posts">
+              <div class="panel-head">
+                <div>
+                  <div class="panel-title">Recent Posts</div>
+                  <div class="panel-meta" id="postsMeta">Live backend data</div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn danger mini" data-action="open-clear-posts">Clear All Posts</button>
+                </div>
+              </div>
+              <div class="list" id="recentPosts"></div>
+            </section>
+
+            <div class="double">
+              <section class="panel" data-panel="reports">
+                <div class="panel-head">
+                  <div class="panel-title">Reports</div>
+                  <div class="panel-meta" id="reportsMeta">0 open</div>
+                </div>
+                <div class="list" id="reportsList"></div>
+              </section>
+
+              <section class="panel" data-panel="activity">
+                <div class="panel-head">
+                  <div class="panel-title">Admin Activity</div>
+                  <div class="panel-meta" id="activityMeta">Audit trail</div>
+                </div>
+                <div class="list" id="activityList"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="stack">
+            <section class="panel search-wrap" data-panel="users">
+              <div class="panel-head">
+                <div class="panel-title">User Management</div>
+                <div class="panel-meta" id="usersMeta">0 loaded</div>
+              </div>
+              <div class="user-list" id="usersList"></div>
+            </section>
+
+            <section class="panel" data-panel="users">
+              <div class="panel-head">
+                <div class="panel-title">Selected User</div>
+                <div class="panel-meta">Live profile</div>
+              </div>
+              <div id="selectedUserPanel" class="empty">Pick a user to inspect.</div>
+            </section>
+
+            <section class="panel" data-panel="users reports">
+              <div class="panel-head">
+                <div class="panel-title">Banned Users</div>
+                <div class="panel-meta" id="bannedMeta">0 shown</div>
+              </div>
+              <div class="banned-list" id="bannedList"></div>
+            </section>
+
+            <section class="panel search-wrap" id="adminMembersPanelSection" data-panel="admins" hidden>
+              <div class="panel-head">
+                <div>
+                  <div class="panel-title">Admin Members</div>
+                  <div class="panel-meta" id="adminMembersMeta">Owner-only access control</div>
+                </div>
+                <button class="btn mini primary" id="createAdminMemberButton">Add Admin</button>
+              </div>
+              <div class="user-list" id="adminMembersList"></div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-shell" id="modalShell">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="modalTitle">Confirm Action</div>
+        <div class="modal-note" id="modalNote">Provide a note for the moderation log.</div>
+      </div>
+      <label class="field">
+        <span class="label" id="modalFieldLabel">Reason</span>
+        <textarea class="textarea" id="modalInput"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button class="btn ghost" id="modalCancelButton">Cancel</button>
+        <button class="btn primary" id="modalConfirmButton">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "ananymous.admin.standalone";
+      const RENDER_API_BASE = "https://annanymous.onrender.com/api/v1";
+      const LOCAL_API_BASE = "http://127.0.0.1:4000/api/v1";
+      const LOCAL_PROXY_API_BASE = `${window.location.origin}/api/v1`;
+      const DEFAULT_API_BASE = ["127.0.0.1", "localhost"].includes(window.location.hostname)
+        ? LOCAL_PROXY_API_BASE
+        : RENDER_API_BASE;
+      const LEGACY_LOCAL_API_BASE = "http://localhost:4000/api/v1";
+      const APP_SCHEME_BASE = "ananymous://";
+      const AUTO_REFRESH_MS = 30000;
+      const EMPTY_OVERVIEW = () => ({ stats: {}, recentPosts: [], reports: [], bannedUsers: [], activity: [] });
+      const EMPTY_TRENDS = () => ({
+        days: 14,
+        series: [],
+        totals: { posts: 0, users: 0, reports: 0, comments: 0, votes: 0 },
+        categories: [],
+        trendingPosts: [],
+      });
+
+      const state = {
+        apiBase: DEFAULT_API_BASE,
+        token: null,
+        walletAddress: null,
+        sessionEmail: null,
+        sessionAuthType: null,
+        access: null,
+        overview: EMPTY_OVERVIEW(),
+        trends: EMPTY_TRENDS(),
+        users: [],
+        adminMembers: [],
+        selectedUserId: null,
+        selectedUser: null,
+        query: "",
+        pending: new Set(),
+        activeView: "overview",
+        trendDays: 14,
+        autoRefreshEnabled: true,
+        userSort: "recent",
+        userBannedOnly: false,
+        lastLoadedAt: null,
+        sessionEvents: [],
+        modal: null,
+        bannerTimer: null,
+      };
+
+      let autoRefreshTimer = null;
+      let searchTimer = null;
+
+      const $ = (id) => document.getElementById(id);
+      const els = {
+        apiBaseInput: $("apiBaseInput"),
+        apiOriginText: $("apiOriginText"),
+        searchInput: $("searchInput"),
+        connectButton: $("connectButton"),
+        disconnectButton: $("disconnectButton"),
+        adminMembersNav: $("adminMembersNav"),
+        adminMembersPanelSection: $("adminMembersPanelSection"),
+        adminMembersMeta: $("adminMembersMeta"),
+        adminMembersList: $("adminMembersList"),
+        createAdminMemberButton: $("createAdminMemberButton"),
+        authShell: $("authShell"),
+        authEmailInput: $("authEmailInput"),
+        authPasswordInput: $("authPasswordInput"),
+        passwordLoginButton: $("passwordLoginButton"),
+        walletLoginButton: $("walletLoginButton"),
+        authHintText: $("authHintText"),
+        refreshButton: $("refreshButton"),
+        exportButton: $("exportButton"),
+        autoRefreshToggle: $("autoRefreshToggle"),
+        bannedOnlyToggle: $("bannedOnlyToggle"),
+        userSortSelect: $("userSortSelect"),
+        sessionLabel: $("sessionLabel"),
+        banner: $("banner"),
+        bannerBadge: $("bannerBadge"),
+        bannerTitle: $("bannerTitle"),
+        bannerText: $("bannerText"),
+        bannerCloseButton: $("bannerCloseButton"),
+        statsGrid: $("statsGrid"),
+        recentPosts: $("recentPosts"),
+        postsMeta: $("postsMeta"),
+        reportsList: $("reportsList"),
+        activityList: $("activityList"),
+        usersList: $("usersList"),
+        selectedUserPanel: $("selectedUserPanel"),
+        bannedList: $("bannedList"),
+        reportsMeta: $("reportsMeta"),
+        usersMeta: $("usersMeta"),
+        bannedMeta: $("bannedMeta"),
+        activityMeta: $("activityMeta"),
+        connectionStatusText: $("connectionStatusText"),
+        adminStatusText: $("adminStatusText"),
+        lastUpdatedText: $("lastUpdatedText"),
+        sessionStateValue: $("sessionStateValue"),
+        sessionStateNote: $("sessionStateNote"),
+        syncStateValue: $("syncStateValue"),
+        syncStateNote: $("syncStateNote"),
+        queueStateValue: $("queueStateValue"),
+        queueStatePills: $("queueStatePills"),
+        sideNav: $("sideNav"),
+        trendMeta: $("trendMeta"),
+        trendDaysSelect: $("trendDaysSelect"),
+        trendChart: $("trendChart"),
+        trendTotals: $("trendTotals"),
+        trendCategories: $("trendCategories"),
+        walletHelp: $("walletHelp"),
+        trendingPostsList: $("trendingPostsList"),
+        modalShell: $("modalShell"),
+        modalTitle: $("modalTitle"),
+        modalNote: $("modalNote"),
+        modalFieldLabel: $("modalFieldLabel"),
+        modalInput: $("modalInput"),
+        modalCancelButton: $("modalCancelButton"),
+        modalConfirmButton: $("modalConfirmButton"),
+      };
+
+      const escapeHtml = (value) => String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+      const formatWallet = (value) => {
+        if (!value) return "Unknown wallet";
+        return value.length <= 14 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`;
+      };
+
+      const formatDate = (value) => {
+        if (!value) return "-";
+        try {
+          return new Date(value).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          return value;
+        }
+      };
+
+      const formatRelative = (value) => {
+        if (!value) return "Never";
+        const diff = Date.now() - new Date(value).getTime();
+        if (!Number.isFinite(diff)) return formatDate(value);
+        const minutes = Math.floor(diff / 60000);
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+      };
+
+      const formatShortDate = (value) => {
+        if (!value) return "-";
+        try {
+          return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          });
+        } catch {
+          return value;
+        }
+      };
+
+      const showBanner = (message, type = "success") => {
+        window.clearTimeout(state.bannerTimer);
+        if (!message) {
+          els.banner.classList.remove("show");
+          return;
+        }
+
+        const bannerMeta = {
+          success: { badge: "OK", title: "Update Complete" },
+          error: { badge: "ERR", title: "Action Failed" },
+          info: { badge: "FYI", title: "Notice" },
+        }[type] || { badge: "FYI", title: "Notice" };
+
+        els.banner.classList.remove("success", "error", "info", "show");
+        void els.banner.offsetWidth;
+        els.banner.classList.add(type === "error" ? "error" : type === "success" ? "success" : "info", "show");
+        els.bannerBadge.textContent = bannerMeta.badge;
+        els.bannerBadge.className = `badge ${type === "error" ? "error" : type === "success" ? "success" : "info"}`;
+        els.bannerTitle.textContent = bannerMeta.title;
+        els.bannerText.textContent = message;
+        state.bannerTimer = window.setTimeout(() => {
+          els.banner.classList.remove("show");
+        }, 3200);
+      };
+
+      const persist = () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          apiBase: state.apiBase,
+          token: state.token,
+          walletAddress: state.walletAddress,
+          sessionEmail: state.sessionEmail,
+          sessionAuthType: state.sessionAuthType,
+          activeView: state.activeView,
+          trendDays: state.trendDays,
+          autoRefreshEnabled: state.autoRefreshEnabled,
+          userSort: state.userSort,
+          userBannedOnly: state.userBannedOnly,
+        }));
+      };
+
+      const restore = () => {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+          if (parsed?.apiBase) state.apiBase = parsed.apiBase;
+          if (parsed?.token) state.token = parsed.token;
+          if (parsed?.walletAddress) state.walletAddress = parsed.walletAddress;
+          if (parsed?.sessionEmail) state.sessionEmail = parsed.sessionEmail;
+          if (parsed?.sessionAuthType) state.sessionAuthType = parsed.sessionAuthType;
+          if (parsed?.activeView) state.activeView = parsed.activeView;
+          if (parsed?.trendDays) state.trendDays = Number(parsed.trendDays) || 14;
+          if (typeof parsed?.autoRefreshEnabled === "boolean") state.autoRefreshEnabled = parsed.autoRefreshEnabled;
+          if (parsed?.userSort) state.userSort = parsed.userSort;
+          if (typeof parsed?.userBannedOnly === "boolean") state.userBannedOnly = parsed.userBannedOnly;
+        } catch {}
+
+        if (
+          !state.apiBase ||
+          (["127.0.0.1", "localhost"].includes(window.location.hostname) &&
+            [RENDER_API_BASE, LOCAL_API_BASE, LEGACY_LOCAL_API_BASE].includes(state.apiBase)) ||
+          state.apiBase === LEGACY_LOCAL_API_BASE
+        ) {
+          state.apiBase = DEFAULT_API_BASE;
+        }
+      };
+
+      const selectBestApiBase = async () => {
+        const isLocalPage = ["127.0.0.1", "localhost"].includes(window.location.hostname);
+        if (!isLocalPage) {
+          return;
+        }
+
+        state.apiBase = LOCAL_PROXY_API_BASE;
+        persist();
+      };
+
+      const pushSessionEvent = (action, meta = {}) => {
+        state.sessionEvents.unshift({
+          id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          action,
+          adminWallet: state.walletAddress,
+          meta,
+          createdAt: new Date().toISOString(),
+          local: true,
+        });
+        state.sessionEvents = state.sessionEvents.slice(0, 8);
+      };
+
+      const request = async (path, options = {}) => {
+        const response = await fetch(`${state.apiBase}${path}`, {
+          method: options.method || "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error?.message || "Request failed");
+        }
+
+        return payload;
+      };
+
+      const setPending = (key, active) => {
+        if (active) state.pending.add(key);
+        else state.pending.delete(key);
+        render();
+      };
+
+      const copyText = async (value, label) => {
+        try {
+          await navigator.clipboard.writeText(String(value));
+          showBanner(`${label} copied.`, "success");
+        } catch {
+          showBanner(`Failed to copy ${label.toLowerCase()}.`, "error");
+        }
+      };
+
+      const buildAppUrl = (path, params = {}) => {
+        if (path === "post/comments" && params.initialPostId) {
+          return `${APP_SCHEME_BASE}${path}/${encodeURIComponent(String(params.initialPostId))}`;
+        }
+
+        const query = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && value !== "") {
+            query.set(key, String(value));
+          }
+        });
+
+        const queryString = query.toString();
+        return `${APP_SCHEME_BASE}${path}${queryString ? `?${queryString}` : ""}`;
+      };
+
+      const renderAppLink = (path, label, params = {}) => (
+        `<a class="btn mini secondary app-link" href="${escapeHtml(buildAppUrl(path, params))}">${escapeHtml(label)}</a>`
+      );
+
+      const openAppLink = (url) => {
+        const fallbackTimer = window.setTimeout(() => {
+          if (document.visibilityState === "visible") {
+            showBanner("These app buttons only open on the same device where the Ananymous app or dev build is installed. They will not launch your phone app from this desktop browser.", "info");
+          }
+        }, 1100);
+
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === "hidden") {
+            window.clearTimeout(fallbackTimer);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+          }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.location.href = url;
+      };
+
+      const getSortedUsers = () => {
+        const users = [...state.users];
+        const filtered = state.userBannedOnly ? users.filter((user) => user.isBanned) : users;
+        filtered.sort((left, right) => {
+          if (state.userSort === "posts") return (right.postCount || 0) - (left.postCount || 0);
+          if (state.userSort === "comments") return (right.commentCount || 0) - (left.commentCount || 0);
+          if (state.userSort === "banned") {
+            return Number(Boolean(right.isBanned)) - Number(Boolean(left.isBanned)) || ((right.id || 0) - (left.id || 0));
+          }
+          return (right.id || 0) - (left.id || 0);
+        });
+        return filtered;
+      };
+
+      const renderStats = () => {
+        const stats = state.overview?.stats || {};
+        const values = [stats.totalUsers, stats.activePosts, stats.reportedPosts, stats.bannedUsers];
+        [...els.statsGrid.querySelectorAll(".stat-value")].forEach((node, index) => {
+          node.textContent = values[index] ?? "-";
+        });
+      };
+
+      const renderTrends = () => {
+        const trendData = state.trends || EMPTY_TRENDS();
+        const series = trendData.series || [];
+        const selectedMetric = ({
+          users: "users",
+          posts: "posts",
+          reports: "reports",
+          activity: "votes",
+        })[state.activeView] || "posts";
+        const selectedLabel = selectedMetric.charAt(0).toUpperCase() + selectedMetric.slice(1);
+
+        els.trendMeta.textContent = `Last ${state.trendDays} days of real backend activity · ${selectedLabel}`;
+
+        if (!series.length) {
+          els.trendChart.innerHTML = '<div class="empty">Sign in to load trend data.</div>';
+          els.trendTotals.innerHTML = "";
+          els.trendCategories.innerHTML = '<div class="empty">No category data yet.</div>';
+          els.trendingPostsList.innerHTML = '<div class="empty">No trending posts yet.</div>';
+          els.walletHelp.innerHTML = `
+            <div class="helper-step"><strong>1.</strong> Sign in with your admin email and password if you want direct dashboard access.</div>
+            <div class="helper-step"><strong>2.</strong> Or install MetaMask on Chrome or Brave, then unlock a wallet that already has admin access.</div>
+            <div class="helper-step"><strong>3.</strong> Click <strong>Wallet Login</strong>, approve access, then sign the challenge.</div>
+          `;
+          return;
+        }
+
+        const values = series.map((item) => Number(item[selectedMetric] || 0));
+        const maxValue = Math.max(1, ...values);
+        const width = 720;
+        const height = 220;
+        const paddingX = 28;
+        const paddingY = 18;
+        const innerWidth = width - paddingX * 2;
+        const innerHeight = height - paddingY * 2;
+        const stepX = series.length > 1 ? innerWidth / (series.length - 1) : 0;
+        const points = values.map((value, index) => {
+          const x = paddingX + stepX * index;
+          const y = height - paddingY - (value / maxValue) * innerHeight;
+          return { x, y, value, date: series[index].date };
+        });
+        const pointString = points.map((point) => `${point.x},${point.y}`).join(" ");
+        const areaString = points.length
+          ? `${paddingX},${height - paddingY} ${pointString} ${points[points.length - 1].x},${height - paddingY}`
+          : "";
+        const peakPoint = points.reduce((best, point) => (point.value > best.value ? point : best), points[0]);
+        const axisMarks = [0, Math.round(maxValue / 2), maxValue];
+
+        els.trendChart.innerHTML = `
+          <svg class="trend-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${selectedLabel} trend chart">
+            ${axisMarks.map((mark) => {
+              const y = height - paddingY - (mark / maxValue) * innerHeight;
+              return `<g><line class="trend-grid-line" x1="${paddingX}" y1="${y}" x2="${width - paddingX}" y2="${y}"></line><text class="trend-axis-label" x="8" y="${y + 4}">${mark}</text></g>`;
+            }).join("")}
+            ${areaString ? `<polygon class="trend-area" points="${areaString}"></polygon>` : ""}
+            ${pointString ? `<polyline class="trend-line" points="${pointString}"></polyline>` : ""}
+            ${points.map((point) => `<circle class="trend-point" cx="${point.x}" cy="${point.y}" r="4"></circle>`).join("")}
+            ${points.map((point, index) => index % Math.max(1, Math.ceil(points.length / 6)) === 0 || index === points.length - 1
+              ? `<text class="trend-axis-label" x="${point.x}" y="${height - 2}" text-anchor="middle">${escapeHtml(formatShortDate(point.date))}</text>`
+              : "").join("")}
+          </svg>
+          <div class="item-meta">Peak ${selectedLabel.toLowerCase()}: ${peakPoint?.value ?? 0} on ${escapeHtml(formatShortDate(peakPoint?.date))}</div>
+        `;
+
+        els.trendTotals.innerHTML = [
+          ["Posts", trendData.totals.posts, "var(--blue)"],
+          ["Users", trendData.totals.users, "var(--green)"],
+          ["Reports", trendData.totals.reports, "var(--red)"],
+          ["Comments", trendData.totals.comments, "var(--amber)"],
+          ["Votes", trendData.totals.votes, "#cdd8ff"],
+        ].map(([label, value, color]) => `
+          <div class="legend-chip"><span class="legend-dot" style="background:${color}"></span>${label}: ${value}</div>
+        `).join("");
+
+        const categories = trendData.categories || [];
+        const maxCategoryCount = Math.max(1, ...categories.map((item) => Number(item.count || 0)));
+        els.trendCategories.innerHTML = categories.length
+          ? categories.map((item) => `
+            <div class="trend-bar-row">
+              <div class="trend-bar-head"><span>${escapeHtml(item.category)}</span><span>${item.count}</span></div>
+              <div class="trend-bar-track"><div class="trend-bar-fill" style="width:${(Number(item.count || 0) / maxCategoryCount) * 100}%"></div></div>
+            </div>
+          `).join("")
+          : '<div class="empty">No category data in this period.</div>';
+
+        const trendingPosts = trendData.trendingPosts || [];
+        els.trendingPostsList.innerHTML = trendingPosts.length
+          ? trendingPosts.map((post) => `
+            <div class="item">
+              <div class="item-main">
+                <div class="item-title">${escapeHtml(post.category || "general")} · score ${post.trendingScore}</div>
+                <div class="item-body">${escapeHtml(post.body || "No preview")}</div>
+                <div class="item-meta">${escapeHtml(formatWallet(post.walletAddress))} · ${post.upVotes} up · ${post.commentCount} comments</div>
+              </div>
+              <div class="item-actions">
+                ${renderAppLink("post/comments", "Open Thread", { initialPostId: post.id })}
+              </div>
+            </div>
+          `).join("")
+          : '<div class="empty">No trending posts in this period.</div>';
+
+        els.walletHelp.innerHTML = state.token
+          ? (state.sessionAuthType === "password"
+            ? `
+              <div class="helper-step"><strong>Signed in:</strong> ${escapeHtml(state.sessionEmail || "admin")}</div>
+              <div class="helper-step"><strong>Session flow:</strong> when the session expires, sign in again with your admin email and password.</div>
+              <div class="helper-step"><strong>Wallet option:</strong> you can still use <strong>Wallet Login</strong> if the wallet is listed in <strong>ADMIN_WALLETS</strong>.</div>
+            `
+            : `
+              <div class="helper-step"><strong>Connected:</strong> ${escapeHtml(formatWallet(state.walletAddress))}</div>
+              <div class="helper-step"><strong>Sign-in flow:</strong> when the session expires, click <strong>Wallet Login</strong> again and sign the challenge.</div>
+              <div class="helper-step"><strong>If rejected:</strong> the wallet must exist in the backend <strong>ADMIN_WALLETS</strong> list.</div>
+            `)
+          : `
+            <div class="helper-step"><strong>1.</strong> Sign in with your admin email and password, or install MetaMask on Chrome/Brave.</div>
+            <div class="helper-step"><strong>2.</strong> If using wallet auth, unlock the wallet that should be your admin wallet.</div>
+            <div class="helper-step"><strong>3.</strong> Click <strong>Wallet Login</strong>, approve account access, then sign the challenge message.</div>
+          `;
+      };
+
+      const renderRecentPosts = () => {
+        const posts = state.overview?.recentPosts || [];
+        els.postsMeta.textContent = `${posts.length} recent items`;
+        if (!posts.length) {
+          els.recentPosts.innerHTML = '<div class="empty">No recent posts available.</div>';
+          return;
+        }
+
+        els.recentPosts.innerHTML = posts.map((post) => `
+          <div class="item">
+            <div class="item-main">
+              <div class="item-title">${escapeHtml(formatWallet(post.walletAddress))}</div>
+              <div class="item-body">${escapeHtml(post.body || "No body")}</div>
+              <div class="item-meta">${escapeHtml(formatDate(post.createdAt))} · ${escapeHtml(formatRelative(post.createdAt))}</div>
+            </div>
+            <div class="item-actions">
+              ${renderAppLink("post/comments", "Open in App", { initialPostId: post.id })}
+              ${post.walletAddress ? `<button class="btn mini secondary" data-action="copy-text" data-value="${escapeHtml(post.walletAddress)}" data-label="Wallet">Copy Wallet</button>` : ""}
+              ${post.userId ? `<button class="btn mini secondary" data-action="select-user" data-id="${post.userId}">Inspect User</button>` : ""}
+              <button class="btn mini danger" data-action="open-delete-post" data-id="${post.id}" data-label="Post #${post.id}" ${state.pending.has(`delete-post-${post.id}`) ? "disabled" : ""}>${state.pending.has(`delete-post-${post.id}`) ? "Working..." : "Delete"}</button>
+            </div>
+          </div>
+        `).join("");
+      };
+
+      const renderReports = () => {
+        const reports = state.overview?.reports || [];
+        els.reportsMeta.textContent = `${reports.length} open`;
+        if (!reports.length) {
+          els.reportsList.innerHTML = '<div class="empty">No open reports.</div>';
+          return;
+        }
+
+        els.reportsList.innerHTML = reports.map((report) => `
+          <div class="item">
+            <div class="item-main">
+              <div class="item-title">Post #${report.postId}</div>
+              <div class="item-body">${escapeHtml(report.reason || "No reason supplied")}</div>
+              ${report.postPreview ? `<div class="item-body">Preview: ${escapeHtml(report.postPreview)}</div>` : ""}
+              <div class="item-meta">reporter ${escapeHtml(formatWallet(report.reporterWallet))} | author ${escapeHtml(formatWallet(report.authorWallet))} | ${escapeHtml(formatRelative(report.createdAt))}</div>
+            </div>
+            <div class="item-actions">
+              ${renderAppLink("post/comments", "Open Thread", { initialPostId: report.postId })}
+              ${report.authorWallet ? `<button class="btn mini secondary" data-action="copy-text" data-value="${escapeHtml(report.authorWallet)}" data-label="Author wallet">Copy Author</button>` : ""}
+              <button class="btn mini success" data-action="open-resolve-report" data-id="${report.id}" data-label="Report #${report.id}" ${state.pending.has(`resolve-report-${report.id}`) ? "disabled" : ""}>${state.pending.has(`resolve-report-${report.id}`) ? "Working..." : "Resolve"}</button>
+            </div>
+          </div>
+        `).join("");
+      };
+
+      const renderActivity = () => {
+        const remote = state.overview?.activity || [];
+        const activity = [...state.sessionEvents, ...remote].slice(0, 12);
+        els.activityMeta.textContent = `${activity.length} events shown`;
+        if (!activity.length) {
+          els.activityList.innerHTML = '<div class="empty">No admin activity recorded yet.</div>';
+          return;
+        }
+
+        els.activityList.innerHTML = activity.map((item) => {
+          const meta = Object.entries(item.meta || {}).slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(" | ");
+          const label = String(item.action || "event").split("_").map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1)).join(" ");
+          return `
+            <div class="item">
+              <div class="item-main">
+                <div class="item-title">${escapeHtml(formatWallet(item.adminWallet))}${item.local ? ' <span class="pill neutral">LOCAL</span>' : ""}</div>
+                <div class="item-body">${escapeHtml(meta ? `${label} | ${meta}` : label)}</div>
+              </div>
+              <div class="item-meta">${escapeHtml(formatDate(item.createdAt))}</div>
+            </div>
+          `;
+        }).join("");
+      };
+
+      const renderUsers = () => {
+        const users = getSortedUsers();
+        els.usersMeta.textContent = `${users.length} shown`;
+        if (!users.length) {
+          els.usersList.innerHTML = '<div class="empty">No users found.</div>';
+          return;
+        }
+
+        els.usersList.innerHTML = users.map((user) => `
+          <div class="user ${state.selectedUserId === user.id ? "active" : ""}" data-action="select-user" data-id="${user.id}">
+            <div>
+              <div class="item-title">${escapeHtml(user.displayName || formatWallet(user.walletAddress))}</div>
+              <div class="item-meta">${escapeHtml(formatWallet(user.walletAddress))} · ${user.postCount} posts · ${user.commentCount} comments</div>
+            </div>
+            ${user.isBanned ? '<div class="pill danger">BANNED</div>' : '<div class="pill neutral">ACTIVE</div>'}
+          </div>
+        `).join("");
+      };
+
+      const renderSelectedUser = () => {
+        const user = state.selectedUser;
+        if (!user) {
+          els.selectedUserPanel.innerHTML = '<div class="empty">Pick a user to inspect.</div>';
+          return;
+        }
+
+        els.selectedUserPanel.innerHTML = `
+          <div class="item-title">${escapeHtml(user.displayName || formatWallet(user.walletAddress))}</div>
+          <div class="item-meta mono">${escapeHtml(user.walletAddress)}</div>
+          <div class="item-meta">Created ${escapeHtml(formatDate(user.createdAt))} · ${escapeHtml(formatRelative(user.createdAt))}</div>
+          <div class="detail-grid">
+            <div class="detail"><div class="detail-label">Posts</div><div class="detail-value">${user.postCount ?? 0}</div></div>
+            <div class="detail"><div class="detail-label">Comments</div><div class="detail-value">${user.commentCount ?? 0}</div></div>
+            <div class="detail"><div class="detail-label">Votes</div><div class="detail-value">${user.voteCount ?? 0}</div></div>
+            <div class="detail"><div class="detail-label">Status</div><div class="detail-value">${user.isBanned ? "Banned" : "Live"}</div></div>
+          </div>
+          ${user.isBanned ? `<div class="warning"><div class="item-title">Banned</div><div class="item-body">${escapeHtml(user.bannedReason || "No reason recorded.")}</div></div>` : ""}
+          <div class="actions" style="margin-top: 14px;">
+            ${renderAppLink("wallet", "Open in App")}
+            <button class="btn ghost" data-action="copy-text" data-value="${escapeHtml(user.walletAddress)}" data-label="Wallet">Copy Wallet</button>
+            ${user.isBanned
+              ? `<button class="btn success" data-action="unban-user" data-id="${user.id}" ${state.pending.has(`unban-user-${user.id}`) ? "disabled" : ""}>${state.pending.has(`unban-user-${user.id}`) ? "Working..." : "Unban User"}</button>`
+              : `<button class="btn danger" data-action="open-ban-user" data-id="${user.id}" data-label="${escapeHtml(user.walletAddress)}" ${state.pending.has(`ban-user-${user.id}`) ? "disabled" : ""}>${state.pending.has(`ban-user-${user.id}`) ? "Working..." : "Ban User"}</button>`}
+          </div>
+        `;
+      };
+
+      const renderBanned = () => {
+        const banned = state.overview?.bannedUsers || [];
+        els.bannedMeta.textContent = `${banned.length} shown`;
+        if (!banned.length) {
+          els.bannedList.innerHTML = '<div class="empty">No banned users.</div>';
+          return;
+        }
+
+        els.bannedList.innerHTML = banned.map((user) => `
+          <div class="user" data-action="select-user" data-id="${user.id}">
+            <div>
+              <div class="item-title">${escapeHtml(formatWallet(user.walletAddress))}</div>
+              <div class="item-meta">${escapeHtml(user.bannedReason || "Banned by admin")} · ${escapeHtml(formatRelative(user.bannedAt))}</div>
+            </div>
+            <div class="pill danger">BANNED</div>
+          </div>
+        `).join("");
+      };
+
+      const renderAuthGate = () => {
+        const isConnected = Boolean(state.token);
+        const authBusy = state.pending.has("password-login") || state.pending.has("wallet-login");
+        els.authShell.classList.toggle("show", !isConnected);
+        els.passwordLoginButton.disabled = authBusy;
+        els.walletLoginButton.disabled = authBusy;
+        els.authHintText.textContent = authBusy
+          ? "Signing in..."
+          : "If wallet login is used, the wallet must still be listed as an admin on the backend.";
+      };
+
+      const renderSession = () => {
+        const isConnected = Boolean(state.token);
+        const isAdmin = Boolean(state.access?.isAdmin);
+        const authType = state.sessionAuthType || state.access?.authType || (state.walletAddress ? "wallet" : null);
+        const role = state.access?.role || "admin";
+        els.sessionLabel.textContent = isConnected
+          ? (authType === "password"
+            ? `admin: ${state.sessionEmail || "credential session"}`
+            : `wallet: ${formatWallet(state.walletAddress)}`)
+          : "Sign in with admin email/password or connect an admin wallet.";
+        els.connectButton.hidden = isConnected;
+        els.disconnectButton.hidden = !isConnected;
+        els.connectionStatusText.textContent = isConnected ? (authType === "password" ? "Credential" : "Wallet") : "Disconnected";
+        els.adminStatusText.textContent = isConnected ? (isAdmin ? "Granted" : "Not an admin") : "Unknown";
+        els.lastUpdatedText.textContent = state.lastLoadedAt ? `${formatDate(state.lastLoadedAt)} · ${formatRelative(state.lastLoadedAt)}` : "Never";
+        els.sessionStateValue.textContent = isConnected ? (isAdmin ? "Admin Live" : "Read Blocked") : "Locked";
+        els.sessionStateNote.textContent = isConnected
+          ? (isAdmin
+            ? (authType === "password"
+              ? `Signed in as ${state.sessionEmail || "admin"} · ${role}.`
+              : `Signed in as ${formatWallet(state.walletAddress)}.`)
+            : "This session authenticated but lacks admin rights.")
+          : "Authenticate before opening the moderation dashboard.";
+        els.syncStateValue.textContent = state.autoRefreshEnabled ? "Auto" : "Manual";
+        els.syncStateNote.textContent = state.autoRefreshEnabled
+          ? `Refreshing every ${Math.floor(AUTO_REFRESH_MS / 1000)} seconds while connected.`
+          : "Auto refresh is currently off.";
+      };
+
+      const renderQueue = () => {
+        const stats = state.overview?.stats || {};
+        els.queueStateValue.textContent = String((stats.reportedPosts || 0) + (stats.bannedUsers || 0));
+        els.queueStatePills.innerHTML = `
+          <div class="status-pill">${stats.reportedPosts || 0} reports</div>
+          <div class="status-pill">${stats.bannedUsers || 0} banned</div>
+          <div class="status-pill">${state.pending.size} running</div>
+        `;
+      };
+
+      const renderAdminMembers = () => {
+        const canManageMembers = Boolean(state.access?.canManageMembers);
+        els.adminMembersNav.hidden = !canManageMembers;
+        els.adminMembersPanelSection.hidden = !canManageMembers;
+        els.createAdminMemberButton.disabled = !canManageMembers;
+
+        if (!canManageMembers) {
+          if (state.activeView === "admins") {
+            state.activeView = "overview";
+            persist();
+          }
+          els.adminMembersMeta.textContent = "Owner-only access control";
+          els.adminMembersList.innerHTML = '<div class="empty">Owner access is required to manage admin members.</div>';
+          return;
+        }
+
+        els.adminMembersMeta.textContent = `${state.adminMembers.length} member${state.adminMembers.length === 1 ? "" : "s"} loaded`;
+
+        if (!state.adminMembers.length) {
+          els.adminMembersList.innerHTML = '<div class="empty">No admin members found yet.</div>';
+          return;
+        }
+
+        els.adminMembersList.innerHTML = state.adminMembers.map((member) => {
+          const isOwner = member.role === "owner";
+          const isEnvOwner = Boolean(member.immutable);
+          const statusLabel = member.isActive ? "ACTIVE" : "REMOVED";
+          const statusClass = member.isActive ? "neutral" : "danger";
+
+          return `
+            <div class="user">
+              <div>
+                <div class="item-title">${escapeHtml(member.email)}</div>
+                <div class="item-meta">${isOwner ? "owner" : "admin"} · ${escapeHtml(member.source || "member")} · last login ${escapeHtml(member.lastLoginAt ? formatRelative(member.lastLoginAt) : "never")}</div>
+                <div class="item-meta">created ${escapeHtml(member.createdAt ? formatDate(member.createdAt) : "from env")} ${member.createdByEmail ? `· by ${escapeHtml(member.createdByEmail)}` : ""}</div>
+              </div>
+              <div class="item-actions">
+                <div class="pill ${statusClass}">${statusLabel}</div>
+                ${isEnvOwner ? "" : `<button class="btn mini secondary" data-action="open-reset-admin-password" data-id="${member.id}" data-label="${escapeHtml(member.email)}" ${state.pending.has(`reset-admin-member-${member.id}`) ? "disabled" : ""}>Reset Password</button>`}
+                ${isEnvOwner
+                  ? ""
+                  : (member.isActive
+                    ? `<button class="btn mini danger" data-action="deactivate-admin-member" data-id="${member.id}" data-label="${escapeHtml(member.email)}" ${state.pending.has(`deactivate-admin-member-${member.id}`) ? "disabled" : ""}>Remove</button>`
+                    : `<button class="btn mini success" data-action="activate-admin-member" data-id="${member.id}" data-label="${escapeHtml(member.email)}" ${state.pending.has(`activate-admin-member-${member.id}`) ? "disabled" : ""}>Restore</button>`)}
+              </div>
+            </div>
+          `;
+        }).join("");
+      };
+
+      const renderViewState = () => {
+        [...els.sideNav.querySelectorAll("[data-view]")].forEach((button) => {
+          button.classList.toggle("active", button.getAttribute("data-view") === state.activeView);
+        });
+        [...document.querySelectorAll("[data-panel]")].forEach((panel) => {
+          const tags = panel.getAttribute("data-panel").split(/\s+/);
+          const visible = state.activeView === "overview" || tags.includes(state.activeView);
+          panel.classList.toggle("hidden", !visible);
+        });
+      };
+
+      const renderControls = () => {
+        els.apiBaseInput.value = state.apiBase;
+        els.apiOriginText.textContent = state.apiBase;
+        els.autoRefreshToggle.checked = state.autoRefreshEnabled;
+        els.bannedOnlyToggle.checked = state.userBannedOnly;
+        els.userSortSelect.value = state.userSort;
+        els.trendDaysSelect.value = String(state.trendDays);
+      };
+
+      const renderModal = () => {
+        if (!state.modal) {
+          els.modalShell.classList.remove("show");
+          return;
+        }
+
+        els.modalShell.classList.add("show");
+        els.modalTitle.textContent = state.modal.title;
+        els.modalNote.textContent = state.modal.note;
+        els.modalFieldLabel.textContent = state.modal.label;
+        els.modalInput.value = state.modal.value || "";
+        els.modalConfirmButton.textContent = state.modal.confirmLabel || "Confirm";
+      };
+
+      const render = () => {
+        renderControls();
+        renderAuthGate();
+        renderSession();
+        renderQueue();
+        renderAdminMembers();
+        renderTrends();
+        renderStats();
+        renderRecentPosts();
+        renderReports();
+        renderActivity();
+        renderUsers();
+        renderSelectedUser();
+        renderBanned();
+        renderViewState();
+        renderModal();
+      };
+
+      const refreshOverview = async () => {
+        const payload = await request("/admin/overview?recentLimit=8&reportLimit=8&bannedLimit=8&activityLimit=10", { token: state.token });
+        state.overview = payload.data || EMPTY_OVERVIEW();
+      };
+
+      const refreshTrends = async () => {
+        const payload = await request(`/admin/trends?days=${state.trendDays}`, { token: state.token });
+        state.trends = payload.data || EMPTY_TRENDS();
+      };
+
+      const refreshUsers = async () => {
+        const query = new URLSearchParams();
+        if (state.query.trim()) query.set("query", state.query.trim());
+        query.set("limit", "25");
+        const payload = await request(`/admin/users?${query.toString()}`, { token: state.token });
+        state.users = Array.isArray(payload.data) ? payload.data : [];
+        const shownUsers = getSortedUsers();
+        if (!state.selectedUserId || !shownUsers.some((item) => item.id === state.selectedUserId)) {
+          state.selectedUserId = shownUsers[0]?.id || null;
+        }
+      };
+
+      const refreshAdminMembers = async () => {
+        if (!state.access?.canManageMembers) {
+          state.adminMembers = [];
+          return;
+        }
+
+        const payload = await request("/admin/members", { token: state.token });
+        state.adminMembers = Array.isArray(payload.data) ? payload.data : [];
+      };
+
+      const refreshSelectedUser = async () => {
+        if (!state.selectedUserId) {
+          state.selectedUser = null;
+          return;
+        }
+
+        const payload = await request(`/admin/users/${state.selectedUserId}`, { token: state.token });
+        state.selectedUser = payload.data;
+      };
+
+      const configureAutoRefresh = () => {
+        window.clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+        if (!state.autoRefreshEnabled || !state.token) {
+          return;
+        }
+
+        autoRefreshTimer = window.setInterval(() => {
+          loadDashboard({ silent: true, recordEvent: false }).catch(() => {
+            showBanner("Auto refresh failed. Check backend connectivity.", "error");
+          });
+        }, AUTO_REFRESH_MS);
+      };
+
+      const loadDashboard = async ({ silent = false, recordEvent = true } = {}) => {
+        if (!state.token) {
+          state.access = null;
+          state.sessionEmail = null;
+          state.sessionAuthType = null;
+          state.overview = EMPTY_OVERVIEW();
+          state.trends = EMPTY_TRENDS();
+          state.users = [];
+          state.adminMembers = [];
+          state.selectedUser = null;
+          render();
+          return;
+        }
+
+        const session = await request("/admin/session/me", { token: state.token });
+        state.access = session.data;
+        state.walletAddress = session.data?.walletAddress || null;
+        state.sessionEmail = session.data?.email || null;
+        state.sessionAuthType = session.data?.authType || (state.walletAddress ? "wallet" : "password");
+
+        if (!state.access.isAdmin) {
+          state.overview = EMPTY_OVERVIEW();
+          state.trends = EMPTY_TRENDS();
+          state.users = [];
+          state.adminMembers = [];
+          state.selectedUser = null;
+          state.lastLoadedAt = new Date().toISOString();
+          persist();
+          configureAutoRefresh();
+          render();
+          showBanner("Connected wallet is not listed as an admin on the backend.", "error");
+          return;
+        }
+
+        await Promise.all([refreshOverview(), refreshUsers(), refreshTrends(), refreshAdminMembers()]);
+        await refreshSelectedUser();
+        state.lastLoadedAt = new Date().toISOString();
+        if (recordEvent) pushSessionEvent("refresh_dashboard", { source: silent ? "auto" : "manual" });
+        persist();
+        configureAutoRefresh();
+        render();
+      };
+
+      const connectWallet = async () => {
+        const ethereum = window.ethereum;
+        if (!ethereum || typeof ethereum.request !== "function") {
+          showBanner("No browser wallet detected. Use MetaMask extension or MetaMask Browser.", "error");
+          return;
+        }
+
+        try {
+          setPending("wallet-login", true);
+          showBanner("Connecting wallet...", "success");
+          const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+          const walletAddress = Array.isArray(accounts) ? accounts.find((value) => typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value)) : null;
+          if (!walletAddress) throw new Error("Wallet did not return an address.");
+
+          const challenge = await request("/auth/challenge", {
+            method: "POST",
+            body: {},
+          });
+
+          const challengeText = challenge.data?.challenge || challenge.challenge;
+          const challengeId = challenge.data?.challengeId || challenge.challengeId;
+
+          const signature = await ethereum.request({
+            method: "personal_sign",
+            params: [challengeText, walletAddress],
+          }).catch(async () => ethereum.request({
+            method: "personal_sign",
+            params: ["0x" + Array.from(new TextEncoder().encode(challengeText)).map((byte) => byte.toString(16).padStart(2, "0")).join(""), walletAddress],
+          }));
+
+          const verify = await request("/auth/verify", {
+            method: "POST",
+            body: {
+              challengeId,
+              signature,
+            },
+          });
+
+          state.token = verify.token || verify.data?.token;
+          state.walletAddress = verify.walletAddress || verify.data?.walletAddress || walletAddress;
+          state.sessionEmail = null;
+          state.sessionAuthType = "wallet";
+          pushSessionEvent("connect_wallet", { walletAddress: state.walletAddress });
+          persist();
+          showBanner("Wallet connected.", "success");
+          await loadDashboard({ silent: false, recordEvent: false });
+        } catch (error) {
+          showBanner(error instanceof Error ? error.message : "Wallet sign-in failed.", "error");
+        } finally {
+          setPending("wallet-login", false);
+        }
+      };
+
+      const loginWithPassword = async () => {
+        const email = els.authEmailInput.value.trim();
+        const password = els.authPasswordInput.value;
+
+        if (!email || !password) {
+          showBanner("Enter the admin email and password before signing in.", "error");
+          return;
+        }
+
+        try {
+          setPending("password-login", true);
+          const payload = await request("/admin/session/login", {
+            method: "POST",
+            body: { email, password },
+          });
+
+          state.token = payload.data?.token || payload.token;
+          state.walletAddress = null;
+          state.sessionEmail = payload.data?.email || email.toLowerCase();
+          state.sessionAuthType = payload.data?.authType || "password";
+          els.authPasswordInput.value = "";
+          persist();
+          await loadDashboard({ silent: false, recordEvent: false });
+          pushSessionEvent("password_login", { email: state.sessionEmail });
+          showBanner("Admin sign-in successful.", "success");
+        } catch (error) {
+          showBanner(error instanceof Error ? error.message : "Admin sign-in failed.", "error");
+        } finally {
+          setPending("password-login", false);
+        }
+      };
+
+      const logout = ({ announce = true } = {}) => {
+        state.token = null;
+        state.walletAddress = null;
+        state.sessionEmail = null;
+        state.sessionAuthType = null;
+        state.access = null;
+        state.overview = EMPTY_OVERVIEW();
+        state.trends = EMPTY_TRENDS();
+        state.users = [];
+        state.adminMembers = [];
+        state.selectedUserId = null;
+        state.selectedUser = null;
+        state.lastLoadedAt = null;
+        state.sessionEvents = [];
+        window.clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+        persist();
+        if (announce) {
+          showBanner("Session cleared.", "success");
+        }
+        render();
+      };
+
+      const openModal = (config) => {
+        state.modal = config;
+        renderModal();
+      };
+
+      const closeModal = () => {
+        state.modal = null;
+        renderModal();
+      };
+
+      const withAction = async (key, work, successMessage, actionName, meta = {}) => {
+        try {
+          setPending(key, true);
+          await work();
+          await Promise.all([refreshOverview(), refreshUsers(), refreshTrends(), refreshAdminMembers()]);
+          await refreshSelectedUser();
+          state.lastLoadedAt = new Date().toISOString();
+          pushSessionEvent(actionName, meta);
+          render();
+          showBanner(successMessage, "success");
+        } catch (error) {
+          showBanner(error instanceof Error ? error.message : "Action failed.", "error");
+        } finally {
+          setPending(key, false);
+          closeModal();
+        }
+      };
+
+      const exportSnapshot = () => {
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          apiBase: state.apiBase,
+          sessionAuthType: state.sessionAuthType,
+          sessionEmail: state.sessionEmail,
+          walletAddress: state.walletAddress,
+          adminMembers: state.adminMembers,
+          overview: state.overview,
+          trends: state.trends,
+          users: getSortedUsers(),
+          selectedUser: state.selectedUser,
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `ananymous-admin-snapshot-${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showBanner("Snapshot exported.", "success");
+      };
+
+      document.addEventListener("click", async (event) => {
+        const appLink = event.target.closest(".app-link");
+        if (appLink) {
+          const href = appLink.getAttribute("href");
+          if (href && href.startsWith(APP_SCHEME_BASE)) {
+            event.preventDefault();
+            openAppLink(href);
+            return;
+          }
+        }
+
+        const target = event.target.closest("[data-action], [data-view]");
+        if (!target) return;
+
+        const navView = target.getAttribute("data-view");
+        if (navView) {
+          state.activeView = navView;
+          persist();
+          render();
+          return;
+        }
+
+        const action = target.getAttribute("data-action");
+        const id = Number(target.getAttribute("data-id"));
+
+        if (action === "copy-text") {
+          await copyText(target.getAttribute("data-value"), target.getAttribute("data-label") || "Value");
+          return;
+        }
+
+        if (action === "select-user") {
+          state.selectedUserId = id;
+          await refreshSelectedUser();
+          state.activeView = "users";
+          render();
+          return;
+        }
+
+        if (action === "open-delete-post") {
+          openModal({
+            title: `Delete ${target.getAttribute("data-label")}`,
+            note: "This will remove the post from the live app feed and record the reason in the admin log.",
+            label: "Delete Reason",
+            value: "Removed by admin",
+            confirmLabel: "Delete Post",
+            onConfirm: async (value) => {
+              await withAction(`delete-post-${id}`, () => request(`/admin/posts/${id}`, {
+                method: "DELETE",
+                token: state.token,
+                body: { reason: value || undefined },
+              }), `Post #${id} deleted.`, "delete_post", { postId: id });
+            },
+          });
+          return;
+        }
+
+        if (action === "open-clear-posts") {
+          openModal({
+            title: "Clear all live posts",
+            note: "This removes every active post from the app feed. Type a reason and confirm to continue.",
+            label: "Delete Reason",
+            value: "Cleared by admin",
+            confirmLabel: "Clear All Posts",
+            onConfirm: async (value) => {
+              await withAction("clear-all-posts", () => request("/admin/posts", {
+                method: "DELETE",
+                token: state.token,
+                body: {
+                  confirm: "CLEAR_ALL_POSTS",
+                  reason: value || undefined,
+                },
+              }), "All active posts cleared.", "delete_all_posts", { reason: value || "Cleared by admin" });
+            },
+          });
+          return;
+        }
+
+        if (action === "open-resolve-report") {
+          openModal({
+            title: `Resolve ${target.getAttribute("data-label")}`,
+            note: "Use this after you review the flagged content. The note will be written to the moderation log.",
+            label: "Resolution Note",
+            value: "Resolved by admin",
+            confirmLabel: "Resolve Report",
+            onConfirm: async (value) => {
+              await withAction(`resolve-report-${id}`, () => request(`/admin/reports/${id}/resolve`, {
+                method: "PATCH",
+                token: state.token,
+                body: { resolutionNote: value || undefined },
+              }), `Report #${id} resolved.`, "resolve_report", { reportId: id });
+            },
+          });
+          return;
+        }
+
+        if (action === "open-ban-user") {
+          const user = state.selectedUser;
+          openModal({
+            title: `Ban ${target.getAttribute("data-label")}`,
+            note: "This prevents the wallet from using the app until an admin removes the ban.",
+            label: "Ban Reason",
+            value: user?.bannedReason || "Banned by admin",
+            confirmLabel: "Ban User",
+            onConfirm: async (value) => {
+              await withAction(`ban-user-${id}`, () => request(`/admin/users/${id}/ban`, {
+                method: "PATCH",
+                token: state.token,
+                body: { reason: value || undefined },
+              }), `User ${formatWallet(user?.walletAddress)} banned.`, "ban_user", { userId: id });
+            },
+          });
+          return;
+        }
+
+        if (action === "open-reset-admin-password") {
+          openModal({
+            title: `Reset password for ${target.getAttribute("data-label")}`,
+            note: "Enter a new password for this admin member.",
+            label: "New Password",
+            value: "",
+            confirmLabel: "Reset Password",
+            onConfirm: async (value) => {
+              await withAction(`reset-admin-member-${id}`, () => request(`/admin/members/${id}/password`, {
+                method: "PATCH",
+                token: state.token,
+                body: { password: value || undefined },
+              }), `Password reset for ${target.getAttribute("data-label")}.`, "reset_admin_member_password", { memberId: id });
+            },
+          });
+          return;
+        }
+
+        if (!state.token) {
+          showBanner("Sign in first.", "error");
+          return;
+        }
+
+        if (action === "activate-admin-member") {
+          await withAction(`activate-admin-member-${id}`, () => request(`/admin/members/${id}/activate`, {
+            method: "PATCH",
+            token: state.token,
+          }), `${target.getAttribute("data-label")} restored.`, "restore_admin_member", { memberId: id });
+          return;
+        }
+
+        if (action === "deactivate-admin-member") {
+          await withAction(`deactivate-admin-member-${id}`, () => request(`/admin/members/${id}/deactivate`, {
+            method: "PATCH",
+            token: state.token,
+          }), `${target.getAttribute("data-label")} removed from admin access.`, "remove_admin_member", { memberId: id });
+          return;
+        }
+
+        if (action === "unban-user") {
+          const user = state.selectedUser;
+          await withAction(`unban-user-${id}`, () => request(`/admin/users/${id}/unban`, {
+            method: "PATCH",
+            token: state.token,
+          }), `User ${formatWallet(user?.walletAddress)} unbanned.`, "unban_user", { userId: id });
+        }
+      });
+
+      els.modalCancelButton.addEventListener("click", closeModal);
+      els.modalConfirmButton.addEventListener("click", async () => {
+        if (!state.modal?.onConfirm) return;
+        await state.modal.onConfirm(els.modalInput.value.trim());
+      });
+      els.modalShell.addEventListener("click", (event) => {
+        if (event.target === els.modalShell) closeModal();
+      });
+
+      els.createAdminMemberButton.addEventListener("click", () => {
+        openModal({
+          title: "Add admin member",
+          note: "Enter the new admin member email on the first line and the password on the second line. Add owner on the third line if this member should also manage admins.",
+          label: "Email\nPassword\nRole (optional)",
+          value: "",
+          confirmLabel: "Create Admin",
+          onConfirm: async (value) => {
+            const [email = "", password = "", role = ""] = String(value || "").split(/\r?\n/).map((item) => item.trim());
+            await withAction("create-admin-member", () => request("/admin/members", {
+              method: "POST",
+              token: state.token,
+              body: {
+                email,
+                password,
+                role: role.toLowerCase() === "owner" ? "owner" : "admin",
+              },
+            }), `${email} added as admin member.`, "create_admin_member", { email, role: role.toLowerCase() === "owner" ? "owner" : "admin" });
+          },
+        });
+      });
+
+      els.apiBaseInput.addEventListener("change", async (event) => {
+        state.apiBase = event.target.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
+        persist();
+        render();
+        if (state.token) {
+          try {
+            await loadDashboard({ silent: true, recordEvent: false });
+            showBanner("Backend URL updated.", "success");
+          } catch (error) {
+            showBanner(error instanceof Error ? error.message : "Failed to reload dashboard.", "error");
+          }
+        }
+      });
+
+      els.searchInput.addEventListener("input", (event) => {
+        state.query = event.target.value;
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(async () => {
+          if (!state.token) return;
+          try {
+            await refreshUsers();
+            await refreshSelectedUser();
+            render();
+          } catch (error) {
+            showBanner(error instanceof Error ? error.message : "Search failed.", "error");
+          }
+        }, 220);
+      });
+
+      els.userSortSelect.addEventListener("change", (event) => {
+        state.userSort = event.target.value;
+        persist();
+        render();
+      });
+
+      els.trendDaysSelect.addEventListener("change", async (event) => {
+        state.trendDays = Number(event.target.value) || 14;
+        persist();
+        if (!state.token) {
+          render();
+          return;
+        }
+
+        try {
+          await refreshTrends();
+          render();
+        } catch (error) {
+          showBanner(error instanceof Error ? error.message : "Trend refresh failed.", "error");
+        }
+      });
+
+      els.bannedOnlyToggle.addEventListener("change", (event) => {
+        state.userBannedOnly = event.target.checked;
+        persist();
+        render();
+      });
+
+      els.autoRefreshToggle.addEventListener("change", (event) => {
+        state.autoRefreshEnabled = event.target.checked;
+        persist();
+        configureAutoRefresh();
+        render();
+        showBanner(state.autoRefreshEnabled ? "Auto refresh enabled." : "Auto refresh disabled.", "success");
+      });
+
+      els.bannerCloseButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.clearTimeout(state.bannerTimer);
+        els.banner.classList.remove("show");
+      });
+
+      els.passwordLoginButton.addEventListener("click", loginWithPassword);
+      els.walletLoginButton.addEventListener("click", connectWallet);
+      els.connectButton.addEventListener("click", connectWallet);
+      els.disconnectButton.addEventListener("click", logout);
+      els.exportButton.addEventListener("click", exportSnapshot);
+      els.refreshButton.addEventListener("click", async () => {
+        if (!state.token) {
+          showBanner("Sign in first.", "error");
+          return;
+        }
+
+        try {
+          showBanner("Refreshing dashboard...", "success");
+          await loadDashboard({ silent: false, recordEvent: true });
+          showBanner("Dashboard refreshed.", "success");
+        } catch (error) {
+          showBanner(error instanceof Error ? error.message : "Refresh failed.", "error");
+        }
+      });
+
+      [els.authEmailInput, els.authPasswordInput].forEach((input) => {
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            loginWithPassword();
+          }
+        });
+      });
+
+      const boot = async () => {
+        restore();
+        await selectBestApiBase();
+        render();
+
+        if (state.token) {
+          loadDashboard({ silent: true, recordEvent: false }).catch((error) => {
+            logout({ announce: false });
+            showBanner(error instanceof Error ? error.message : "Failed to restore session.", "error");
+          });
+        }
+      };
+
+      boot().catch((error) => {
+        render();
+        showBanner(error instanceof Error ? error.message : "Admin bootstrap failed.", "error");
+      });
+    })();
+  </script>
+</body>
+</html>

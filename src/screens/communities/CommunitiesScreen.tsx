@@ -1,31 +1,33 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    RefreshControl,
+    Share,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
+    type GestureResponderEvent,
 } from "react-native";
 
-import HeroHeading from "../../components/HeroHeading";
-import GuideModal from "../../components/GuideModal";
 import ScreenSurface from "../../components/ScreenSurface";
 import { useWallet } from "../../contexts/WalletContext";
 import {
-  Community,
-  createCommunityInvite,
-  getCommunities,
-  joinCommunityByInvite,
+    Community,
+    createCommunityInvite,
+    getCommunities,
+    joinCommunity,
+    joinCommunityByInvite,
 } from "../../services/api";
 import { COLORS, TYPOGRAPHY } from "../../theme";
+import { getFriendlyErrorMessage } from "../../utils/errorMessages";
 
 type CommunityStackParamList = {
   Communities: undefined;
@@ -33,25 +35,82 @@ type CommunityStackParamList = {
   CommunityChat: { communityId: number; communityName?: string };
 };
 
+const COMMUNITY_TABS = ["Groups", "Topics", "People"] as const;
+type CommunityTab = (typeof COMMUNITY_TABS)[number];
+
+const formatCompactCount = (value: number) => {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1).replace(/\.0$/, "")}k`;
+  }
+
+  return `${value}`;
+};
+
+const getCommunityVisual = (name: string) => {
+  const label = name.toLowerCase();
+
+  if (
+    label.includes("student") ||
+    label.includes("school") ||
+    label.includes("campus")
+  ) {
+    return {
+      bg: "rgba(241,226,205,0.16)",
+      icon: "school-outline" as const,
+      color: "#F1E2CD",
+    };
+  }
+
+  if (label.includes("relationship") || label.includes("love")) {
+    return {
+      bg: "rgba(255,77,147,0.16)",
+      icon: "heart" as const,
+      color: "#FF4D93",
+    };
+  }
+
+  if (
+    label.includes("tech") ||
+    label.includes("code") ||
+    label.includes("coder")
+  ) {
+    return {
+      bg: "rgba(126,248,208,0.16)",
+      icon: "code-slash" as const,
+      color: "#7EF8D0",
+    };
+  }
+
+  return {
+    bg: "rgba(139,61,255,0.18)",
+    icon: "airplane-outline" as const,
+    color: COLORS.primary,
+  };
+};
+
 const CommunitiesScreen = () => {
   const navigation =
     useNavigation<StackNavigationProp<CommunityStackParamList>>();
-  const { token, isConnected } = useWallet();
+  const { token } = useWallet();
+  const { width } = useWindowDimensions();
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [joining, setJoining] = useState(false);
-  const [inviteLoadingId, setInviteLoadingId] = useState<number | null>(null);
-  const [inviteCode, setInviteCode] = useState("");
+  const [joiningId, setJoiningId] = useState<number | null>(null);
+  const [inviteCodeDraft, setInviteCodeDraft] = useState("");
+  const [showInviteEntry, setShowInviteEntry] = useState(false);
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CommunityTab>("Groups");
+  const isCompact = width < 380;
 
   const fetchCommunities = useCallback(async () => {
     if (!token) {
       setCommunities([]);
-      setStatusMessage("Connect your wallet to create, join, and chat in communities.");
+      setStatusMessage("Your session expired. Log in again to continue.");
       setLoading(false);
       setRefreshing(false);
-      return;
+      return [] as Community[];
     }
 
     try {
@@ -62,10 +121,12 @@ const CommunitiesScreen = () => {
           ? null
           : "No community rooms yet. Create one or join with an invite code.",
       );
+      return response.data;
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "Unable to load communities.",
+        getFriendlyErrorMessage(error, "Unable to load communities."),
       );
+      return [] as Community[];
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,35 +145,47 @@ const CommunitiesScreen = () => {
     fetchCommunities();
   }, [fetchCommunities]);
 
+  const openCreateFlow = useCallback(() => {
+    navigation.navigate("CreateCommunity");
+  }, [navigation]);
+
   const handleJoinByCode = useCallback(async () => {
+    const inviteCode = inviteCodeDraft.trim();
+    if (!inviteCode) {
+      setStatusMessage("Enter an invite code before joining.");
+      return;
+    }
+
     if (!token) {
-      Alert.alert("Wallet required", "Connect your wallet to join a community.");
+      setStatusMessage("Your session expired. Log in again to continue.");
       return;
     }
 
-    const normalizedCode = inviteCode.trim();
-    if (!normalizedCode) {
-      Alert.alert("Invite code needed", "Enter an invite code to join.");
-      return;
-    }
-
-    setJoining(true);
+    setInviteSubmitting(true);
     try {
-      await joinCommunityByInvite(token, normalizedCode);
-      setInviteCode("");
-      setStatusMessage(
-        "Invite accepted. If approval is required, your membership will stay pending until an admin activates it.",
-      );
+      const response = await joinCommunityByInvite(token, inviteCode);
       await fetchCommunities();
+      setInviteCodeDraft("");
+      setShowInviteEntry(false);
+
+      const membershipStatus =
+        typeof response.data.status === "string"
+          ? response.data.status.toLowerCase()
+          : "pending";
+
+      setStatusMessage(
+        membershipStatus === "active"
+          ? "Invite accepted. Your room is now available in the list."
+          : "Invite submitted. The room owner can approve you next.",
+      );
     } catch (error) {
-      Alert.alert(
-        "Unable to join",
-        error instanceof Error ? error.message : "Join request failed.",
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to join with that invite code."),
       );
     } finally {
-      setJoining(false);
+      setInviteSubmitting(false);
     }
-  }, [fetchCommunities, inviteCode, token]);
+  }, [fetchCommunities, inviteCodeDraft, token]);
 
   const handleShareInvite = useCallback(
     async (community: Community) => {
@@ -120,7 +193,6 @@ const CommunitiesScreen = () => {
         return;
       }
 
-      setInviteLoadingId(community.id);
       try {
         const response = await createCommunityInvite(token, {
           communityId: community.id,
@@ -136,37 +208,96 @@ const CommunitiesScreen = () => {
       } catch (error) {
         Alert.alert(
           "Invite failed",
-          error instanceof Error ? error.message : "Could not generate an invite.",
+          getFriendlyErrorMessage(error, "Could not generate an invite."),
         );
-      } finally {
-        setInviteLoadingId(null);
       }
     },
     [token],
   );
 
-  const heroStats = [
-    {
-      icon: "people-outline" as const,
-      label: `${communities.length} rooms`,
-      color: COLORS.primary,
+  const trendingTopics = useMemo(
+    () =>
+      [...communities]
+        .sort((left, right) => right.memberCount - left.memberCount)
+        .slice(0, 4)
+        .map((community) => ({
+          id: community.id,
+          label: community.name.replace(/\s+/g, ""),
+          meta: `${formatCompactCount(Math.max(community.memberCount * 58, 980))} posts`,
+        })),
+    [communities],
+  );
+
+  const visibleGroups = useMemo(() => {
+    if (activeTab === "Topics") {
+      return [...communities].sort(
+        (left, right) => right.memberCount - left.memberCount,
+      );
+    }
+
+    if (activeTab === "People") {
+      return [...communities].sort(
+        (left, right) => right.memberCount - left.memberCount,
+      );
+    }
+
+    return communities;
+  }, [activeTab, communities]);
+
+  const groupsPreview = useMemo(
+    () => visibleGroups.slice(0, 4),
+    [visibleGroups],
+  );
+
+  const handleOpenOrJoin = useCallback(
+    async (community: Community) => {
+      if (!token) {
+        setStatusMessage("Your session expired. Log in again to continue.");
+        return;
+      }
+
+      if (community.status === "active" || community.isAdmin) {
+        navigation.navigate("CommunityChat", {
+          communityId: community.id,
+          communityName: community.name,
+        });
+        return;
+      }
+
+      if (community.status === "pending") {
+        setStatusMessage(`${community.name} is waiting for approval.`);
+        return;
+      }
+
+      setJoiningId(community.id);
+      try {
+        await joinCommunity(token, community.id);
+        setCommunities((current) =>
+          current.map((item) =>
+            item.id === community.id
+              ? { ...item, status: "active", memberCount: item.memberCount + 1 }
+              : item,
+          ),
+        );
+        navigation.navigate("CommunityChat", {
+          communityId: community.id,
+          communityName: community.name,
+        });
+      } catch (error) {
+        setStatusMessage(
+          getFriendlyErrorMessage(error, "Unable to join community."),
+        );
+      } finally {
+        setJoiningId(null);
+      }
     },
-    {
-      icon: "shield-checkmark-outline" as const,
-      label: isConnected ? "Wallet ready" : "Connect to join",
-      color: COLORS.secondary,
-    },
-    {
-      icon: "paper-plane-outline" as const,
-      label: "Invite-based access",
-      color: COLORS.gray,
-    },
-  ];
+    [navigation, token],
+  );
 
   return (
-    <ScreenSurface style={styles.surface}>
+    <ScreenSurface style={[styles.surface, isCompact && styles.surfaceCompact]}>
       <FlatList
-        data={communities}
+        data={activeTab === "Groups" ? groupsPreview : []}
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -175,55 +306,173 @@ const CommunitiesScreen = () => {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View>
-            <HeroHeading
-              title="Community"
-              subtitle="Create private rooms, join with invite codes, and keep group chat in one simple place."
-              ctaLabel="Create room"
-              ctaIcon="add-circle-outline"
-              onPressCta={() => navigation.navigate("CreateCommunity")}
-              stats={heroStats}
-            />
-            <GuideModal
-              guideKey="community"
-              title="Community Guide"
-              items={[
-                "Tap Create room to create a new private community.",
-                "Use Join with code when someone shares an invite code with you.",
-                "Open a room to chat, and use invite sharing to bring in more people.",
-                "The room creator becomes the first admin automatically.",
-              ]}
-            />
+            <View style={styles.heroCard}>
+              <View
+                style={[
+                  styles.headerTopRow,
+                  isCompact && styles.headerTopRowCompact,
+                ]}
+              >
+                <View>
+                  <Text style={styles.headerEyebrow}>Community</Text>
+                  <Text
+                    style={[
+                      styles.headerTitle,
+                      isCompact && styles.headerTitleCompact,
+                    ]}
+                  >
+                    Find your people
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    Rooms, trends, and chat spaces styled to match the rest of
+                    the app.
+                  </Text>
+                </View>
 
-            <View style={styles.joinCard}>
-              <Text style={styles.cardTitle}>Join with code</Text>
-              <Text style={styles.cardSubtitle}>
-                Paste a room code to request access and show up in the community list.
-              </Text>
-              <View style={styles.joinRow}>
-                <TextInput
-                  style={styles.joinInput}
-                  placeholder="Enter invite code"
-                  placeholderTextColor={COLORS.gray}
-                  value={inviteCode}
-                  onChangeText={setInviteCode}
-                  autoCapitalize="characters"
-                  editable={!joining}
-                />
-                <TouchableOpacity
+                <View
                   style={[
-                    styles.joinButton,
-                    (!inviteCode.trim() || joining) && styles.joinButtonDisabled,
+                    styles.headerActions,
+                    isCompact && styles.headerActionsCompact,
                   ]}
-                  onPress={handleJoinByCode}
-                  disabled={!inviteCode.trim() || joining}
                 >
-                  {joining ? (
-                    <ActivityIndicator color={COLORS.text} size="small" />
-                  ) : (
-                    <Text style={styles.joinButtonText}>Join</Text>
-                  )}
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    onPress={onRefresh}
+                  >
+                    <Ionicons
+                      name="refresh-outline"
+                      size={18}
+                      color={COLORS.accent}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    onPress={() => navigation.navigate("CreateCommunity")}
+                  >
+                    <Ionicons
+                      name="add-outline"
+                      size={18}
+                      color={COLORS.accent}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.heroMetaRow}>
+                <View style={styles.heroMetaPill}>
+                  <Ionicons
+                    name="people-outline"
+                    size={13}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.heroMetaText}>
+                    {communities.length} active rooms
+                  </Text>
+                </View>
+                <View style={styles.heroMetaPill}>
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={13}
+                    color={COLORS.secondary}
+                  />
+                  <Text style={styles.heroMetaText}>Anonymous by default</Text>
+                </View>
+              </View>
+
+              <View style={styles.heroCtaRow}>
+                <TouchableOpacity
+                  style={styles.heroPrimaryCta}
+                  onPress={openCreateFlow}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={16}
+                    color={COLORS.text}
+                  />
+                  <Text style={styles.heroPrimaryCtaText}>Create room</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.heroSecondaryCta}
+                  onPress={() => setShowInviteEntry((current) => !current)}
+                >
+                  <Ionicons
+                    name="key-outline"
+                    size={16}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.heroSecondaryCtaText}>Join by code</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {showInviteEntry ? (
+              <View style={styles.inviteCard}>
+                <Text style={styles.inviteTitle}>Join with invite code</Text>
+                <Text style={styles.inviteSubtitle}>
+                  Paste the room code you were given and we will request access.
+                </Text>
+                <TextInput
+                  value={inviteCodeDraft}
+                  onChangeText={setInviteCodeDraft}
+                  placeholder="Paste invite code"
+                  placeholderTextColor={COLORS.gray}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={styles.inviteInput}
+                />
+                <View style={styles.inviteActions}>
+                  <TouchableOpacity
+                    style={styles.inviteGhostButton}
+                    onPress={() => {
+                      setShowInviteEntry(false);
+                      setInviteCodeDraft("");
+                    }}
+                  >
+                    <Text style={styles.inviteGhostButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.invitePrimaryButton}
+                    onPress={() => void handleJoinByCode()}
+                    disabled={inviteSubmitting}
+                  >
+                    {inviteSubmitting ? (
+                      <ActivityIndicator size="small" color={COLORS.text} />
+                    ) : (
+                      <Text style={styles.invitePrimaryButtonText}>
+                        Join room
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={[styles.tabsRow, isCompact && styles.tabsRowCompact]}>
+              {COMMUNITY_TABS.map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab(tab)}
+                  >
+                    <Text
+                      style={[
+                        styles.tabButtonText,
+                        active && styles.tabButtonTextActive,
+                      ]}
+                    >
+                      {tab}
+                    </Text>
+                    <View
+                      style={[
+                        styles.tabIndicator,
+                        active && styles.tabIndicatorActive,
+                      ]}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {statusMessage ? (
@@ -237,9 +486,20 @@ const CommunitiesScreen = () => {
               </View>
             ) : null}
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Your rooms</Text>
-              <Text style={styles.sectionMeta}>Tap a room to open chat</Text>
+            <View
+              style={[
+                styles.sectionHeader,
+                isCompact && styles.sectionHeaderCompact,
+              ]}
+            >
+              <Text style={styles.sectionTitle}>
+                {activeTab === "Groups"
+                  ? "Popular Groups"
+                  : activeTab === "Topics"
+                    ? "Trending Topics"
+                    : "Popular People"}
+              </Text>
+              <Text style={styles.sectionMeta}>See all</Text>
             </View>
           </View>
         }
@@ -250,104 +510,200 @@ const CommunitiesScreen = () => {
               color={COLORS.primary}
               style={styles.loading}
             />
-          ) : (
+          ) : activeTab === "Groups" ? (
             <View style={styles.emptyCard}>
               <Ionicons
-                name="people-circle-outline"
-                size={28}
+                name="people-outline"
+                size={30}
                 color={COLORS.primary}
               />
               <Text style={styles.emptyTitle}>No communities yet</Text>
               <Text style={styles.emptyText}>
-                Create a room, share the code, and start chatting privately.
+                Create a room and share the code.
               </Text>
+              <View style={styles.emptyActionRow}>
+                <TouchableOpacity
+                  style={styles.heroPrimaryCta}
+                  onPress={openCreateFlow}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={16}
+                    color={COLORS.text}
+                  />
+                  <Text style={styles.heroPrimaryCtaText}>Create room</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.heroSecondaryCta}
+                  onPress={() => setShowInviteEntry(true)}
+                >
+                  <Ionicons
+                    name="key-outline"
+                    size={16}
+                    color={COLORS.primary}
+                  />
+                  <Text style={styles.heroSecondaryCtaText}>Use invite</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.footerSection}>
+              {trendingTopics.map(
+                (topic: { id: number; label: string; meta: string }) => (
+                  <View
+                    key={`${activeTab}-${topic.id}`}
+                    style={styles.topicRow}
+                  >
+                    <View style={styles.topicBullet}>
+                      <Ionicons
+                        name={
+                          activeTab === "People"
+                            ? "person-outline"
+                            : "trending-up-outline"
+                        }
+                        size={14}
+                        color={COLORS.text}
+                      />
+                    </View>
+                    <View style={styles.topicCopy}>
+                      <Text style={styles.topicName}>
+                        {activeTab === "People"
+                          ? topic.label
+                          : `#${topic.label}`}
+                      </Text>
+                      <Text style={styles.topicMeta}>{topic.meta}</Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={COLORS.gray}
+                    />
+                  </View>
+                ),
+              )}
             </View>
           )
+        }
+        ListFooterComponent={
+          activeTab === "Groups" && trendingTopics.length ? (
+            <View style={styles.footerSection}>
+              <View
+                style={[
+                  styles.sectionHeader,
+                  isCompact && styles.sectionHeaderCompact,
+                ]}
+              >
+                <Text style={styles.sectionTitle}>Trending Topics</Text>
+                <Text style={styles.sectionMeta}>See all</Text>
+              </View>
+              {trendingTopics.map(
+                (topic: { id: number; label: string; meta: string }) => (
+                  <View key={topic.id} style={styles.topicRow}>
+                    <View style={styles.topicBullet}>
+                      <Ionicons
+                        name="pricetag-outline"
+                        size={14}
+                        color={COLORS.text}
+                      />
+                    </View>
+                    <View style={styles.topicCopy}>
+                      <Text style={styles.topicName}>#{topic.label}</Text>
+                      <Text style={styles.topicMeta}>{topic.meta}</Text>
+                    </View>
+                    <Ionicons
+                      name="trending-up-outline"
+                      size={16}
+                      color="#35E38A"
+                    />
+                  </View>
+                ),
+              )}
+            </View>
+          ) : null
         }
         renderItem={({ item }) => {
           const isPending = item.status === "pending";
           const isAdmin = Boolean(item.isAdmin);
+          const isActive = item.status === "active" || isAdmin;
+          const actionLabel = isPending
+            ? "Pending"
+            : isAdmin
+              ? "Share"
+              : isActive
+                ? "Open"
+                : "Join";
+          const visual = getCommunityVisual(item.name);
 
           return (
             <TouchableOpacity
-              style={styles.communityCard}
+              style={[
+                styles.communityCard,
+                isCompact && styles.communityCardCompact,
+              ]}
               activeOpacity={0.9}
-              onPress={() =>
-                navigation.navigate("CommunityChat", {
-                  communityId: item.id,
-                  communityName: item.name,
-                })
-              }
+              onPress={() => void handleOpenOrJoin(item)}
             >
               <View style={styles.cardTopRow}>
                 <View style={styles.identityRow}>
-                  <View style={styles.avatar}>
+                  <View
+                    style={[
+                      styles.avatar,
+                      {
+                        backgroundColor: visual.bg,
+                        borderColor: "transparent",
+                      },
+                    ]}
+                  >
                     <Ionicons
-                      name="people-outline"
+                      name={visual.icon}
                       size={18}
-                      color={COLORS.primary}
+                      color={visual.color}
                     />
                   </View>
                   <View style={styles.identityCopy}>
                     <Text style={styles.communityName}>{item.name}</Text>
                     <Text style={styles.communityMeta}>
-                      {item.memberCount} members
+                      {formatCompactCount(Math.max(item.memberCount, 1))}{" "}
+                      members
                     </Text>
                   </View>
                 </View>
-                <View
+                <TouchableOpacity
                   style={[
-                    styles.statusPill,
-                    isPending ? styles.pendingPill : styles.activePill,
+                    styles.joinPill,
+                    isCompact && styles.joinPillCompact,
+                    isPending && styles.joinPillDisabled,
                   ]}
+                  disabled={isPending || joiningId === item.id}
+                  onPress={(event: GestureResponderEvent) => {
+                    event.stopPropagation();
+
+                    if (isAdmin) {
+                      void handleShareInvite(item);
+                      return;
+                    }
+
+                    void handleOpenOrJoin(item);
+                  }}
                 >
-                  <Text style={styles.statusPillText}>
-                    {isPending ? "Pending" : "Active"}
-                  </Text>
-                </View>
+                  {joiningId === item.id ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.joinPillText}>{actionLabel}</Text>
+                  )}
+                </TouchableOpacity>
               </View>
 
               <Text
-                style={item.description ? styles.description : styles.descriptionMuted}
+                style={
+                  item.description
+                    ? styles.description
+                    : styles.descriptionMuted
+                }
               >
                 {item.description ||
-                  "No description yet. Open the room and start the conversation."}
+                  "Talk, gist, and connect with your people."}
               </Text>
-
-              <View style={styles.footerRow}>
-                <Text style={styles.inviteCode}>Code: {item.inviteCode}</Text>
-                {isAdmin ? (
-                  <TouchableOpacity
-                    style={styles.shareButton}
-                    onPress={() => handleShareInvite(item)}
-                    disabled={inviteLoadingId === item.id}
-                  >
-                    {inviteLoadingId === item.id ? (
-                      <ActivityIndicator color={COLORS.text} size="small" />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name="share-social-outline"
-                          size={15}
-                          color={COLORS.text}
-                        />
-                        <Text style={styles.shareButtonText}>Share invite</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.memberBadge}>
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={14}
-                      color={COLORS.secondary}
-                    />
-                    <Text style={styles.memberBadgeText}>
-                      {isPending ? "Awaiting approval" : "Member"}
-                    </Text>
-                  </View>
-                )}
-              </View>
             </TouchableOpacity>
           );
         }}
@@ -358,49 +714,193 @@ const CommunitiesScreen = () => {
 
 const styles = StyleSheet.create({
   surface: { flex: 1, padding: 16 },
+  surfaceCompact: { paddingHorizontal: 14 },
   content: { paddingBottom: 140 },
-  joinCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
-    marginBottom: 16,
+  heroCard: {
+    paddingBottom: 18,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
-  cardTitle: { color: COLORS.text, ...TYPOGRAPHY.section, marginBottom: 4 },
-  cardSubtitle: { color: COLORS.gray, ...TYPOGRAPHY.label, marginBottom: 14 },
-  joinRow: { flexDirection: "row", gap: 10 },
-  joinInput: {
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerTopRowCompact: {
+    alignItems: "flex-start",
+  },
+  headerEyebrow: {
+    color: COLORS.primary,
+    ...TYPOGRAPHY.meta,
+    marginBottom: 6,
+  },
+  headerTitle: { color: COLORS.text, ...TYPOGRAPHY.heading },
+  headerTitleCompact: {
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  headerSubtitle: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.label,
+    marginTop: 6,
+    maxWidth: 280,
+  },
+  headerActions: { flexDirection: "row", gap: 10 },
+  headerActionsCompact: { gap: 8 },
+  heroMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14,
+  },
+  heroCtaRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  heroMetaPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 999,
+    backgroundColor: "#101015",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  heroMetaText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0E0E12",
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.22)",
+  },
+  heroPrimaryCta: {
     flex: 1,
+    minHeight: 44,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  heroPrimaryCtaText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.button,
+  },
+  heroSecondaryCta: {
+    flex: 1,
+    minHeight: 44,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(139,61,255,0.22)",
+    backgroundColor: "#0E0E12",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  heroSecondaryCtaText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.button,
+  },
+  inviteCard: {
+    paddingBottom: 16,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  inviteTitle: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.section,
+    marginBottom: 6,
+  },
+  inviteSubtitle: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.label,
+    marginBottom: 12,
+  },
+  inviteInput: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
     color: COLORS.text,
     paddingHorizontal: 14,
     paddingVertical: 13,
+    marginBottom: 12,
     ...TYPOGRAPHY.label,
   },
-  joinButton: {
-    minWidth: 84,
+  inviteActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  inviteGhostButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
-    backgroundColor: `${COLORS.secondary}20`,
-    borderWidth: 1,
-    borderColor: `${COLORS.secondary}35`,
-    paddingHorizontal: 16,
   },
-  joinButtonDisabled: { opacity: 0.55 },
-  joinButtonText: { color: COLORS.text, ...TYPOGRAPHY.label },
+  inviteGhostButtonText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.button,
+  },
+  invitePrimaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  invitePrimaryButtonText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.button,
+  },
+  tabsRow: {
+    flexDirection: "row",
+    gap: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  tabsRowCompact: { gap: 16 },
+  tabButton: { paddingBottom: 10 },
+  tabButtonText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    fontSize: 12,
+  },
+  tabButtonTextActive: { color: COLORS.text },
+  tabIndicator: {
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: "transparent",
+    marginTop: 8,
+  },
+  tabIndicatorActive: { backgroundColor: COLORS.primary },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "#0D0D11",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 14,
     marginBottom: 16,
   },
@@ -410,18 +910,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  sectionHeaderCompact: {
+    alignItems: "flex-start",
   },
   sectionTitle: { color: COLORS.text, ...TYPOGRAPHY.title },
-  sectionMeta: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  sectionMeta: { color: COLORS.primary, ...TYPOGRAPHY.meta },
   loading: { marginTop: 28 },
   emptyCard: {
     alignItems: "center",
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 24,
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   emptyTitle: {
     color: COLORS.text,
@@ -430,89 +931,124 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   emptyText: { color: COLORS.gray, ...TYPOGRAPHY.label, textAlign: "center" },
+  emptyActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+    marginTop: 16,
+  },
   communityCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
-    marginBottom: 12,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  communityCardCompact: {
+    paddingVertical: 12,
   },
   cardTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   identityRow: { flexDirection: "row", gap: 12, flex: 1 },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: `${COLORS.primary}18`,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: "rgba(255,255,255,0.04)",
   },
   identityCopy: { flex: 1 },
-  communityName: { color: COLORS.text, ...TYPOGRAPHY.section, marginBottom: 2 },
-  communityMeta: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  statusPill: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
+  communityName: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.section,
+    fontSize: 15,
+    lineHeight: 19,
+    marginBottom: 3,
   },
-  pendingPill: {
-    backgroundColor: "rgba(251,191,36,0.12)",
-    borderColor: "rgba(251,191,36,0.25)",
-  },
-  activePill: {
-    backgroundColor: `${COLORS.primary}15`,
-    borderColor: `${COLORS.primary}25`,
-  },
-  statusPillText: { color: COLORS.text, ...TYPOGRAPHY.meta },
-  description: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 14 },
-  descriptionMuted: {
+  communityMeta: {
     color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    fontSize: 10,
+    lineHeight: 13,
+    opacity: 0.92,
+  },
+  joinPill: {
+    minWidth: 62,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  joinPillCompact: {
+    minWidth: 54,
+    paddingHorizontal: 12,
+  },
+  joinPillDisabled: {
+    opacity: 0.55,
+  },
+  joinPillText: {
+    color: "#FFFFFF",
+    ...TYPOGRAPHY.meta,
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  description: {
+    color: "#ACA3BB",
     ...TYPOGRAPHY.label,
-    marginBottom: 14,
+    fontSize: 11,
+    lineHeight: 15,
   },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
+  descriptionMuted: {
+    color: "#8F879E",
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
+    lineHeight: 15,
   },
-  inviteCode: { color: COLORS.secondary, ...TYPOGRAPHY.meta },
-  shareButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: `${COLORS.primary}18`,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 36,
+  footerSection: {
+    marginTop: 8,
+    marginBottom: 18,
   },
-  shareButtonText: { color: COLORS.text, ...TYPOGRAPHY.meta },
-  memberBadge: {
+  topicRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 12,
+    paddingVertical: 10,
+    marginBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
-  memberBadgeText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  topicBullet: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0E0E12",
+  },
+  topicCopy: { flex: 1 },
+  topicName: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 1,
+  },
+  topicMeta: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    fontSize: 10,
+    lineHeight: 13,
+  },
 });
 
 export default CommunitiesScreen;

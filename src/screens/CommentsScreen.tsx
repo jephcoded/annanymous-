@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+    Alert,
     Dimensions,
     FlatList,
     RefreshControl,
@@ -12,19 +13,25 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import Animatable from "react-native-animatable";
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
+import SectionArt from "../components/SectionArt";
 import { useWallet } from "../contexts/WalletContext";
 import {
     CommentItem,
     FeedPost,
     createComment,
+    deletePost,
     getCommentsByPost,
     getFeed,
+  getMe,
     getRecentComments,
 } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import { filterPostsForSettings } from "../utils/contentPreferences";
+import { getFriendlyErrorMessage } from "../utils/errorMessages";
 
 type CommentSort = "newest" | "oldest";
 
@@ -70,9 +77,10 @@ const getThreadTone = (post: FeedPost | null, commentCount: number) => {
 
 const CommentsScreen = () => {
   const route = useRoute<any>();
-  const { token, isConnected } = useWallet();
+  const { token, settings } = useWallet();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [recentComments, setRecentComments] = useState<CommentItem[]>([]);
   const [draft, setDraft] = useState("");
@@ -80,11 +88,20 @@ const CommentsScreen = () => {
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<CommentSort>("newest");
+  const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
+  const visiblePosts = useMemo(
+    () => filterPostsForSettings(posts, settings),
+    [posts, settings],
+  );
 
   const selectedPost = useMemo(
-    () => posts.find((post) => post.id === selectedPostId) || null,
-    [posts, selectedPostId],
+    () =>
+      visiblePosts.find((post: FeedPost) => post.id === selectedPostId) || null,
+    [selectedPostId, visiblePosts],
   );
+  const threadArtSection = selectedPost?.pollOptions?.length
+    ? "polls"
+    : "comments";
   const initialPostId = route.params?.initialPostId ?? null;
 
   const sortedComments = useMemo(() => {
@@ -103,14 +120,16 @@ const CommentsScreen = () => {
     setRefreshing(true);
     try {
       const [feedResponse, recentResponse] = await Promise.all([
-        getFeed({ limit: 6 }),
+        getFeed({ limit: 6, token: token || undefined }),
         getRecentComments(8),
       ]);
       setPosts(feedResponse.data);
       setRecentComments(recentResponse.data);
 
+      const visibleFeed = filterPostsForSettings(feedResponse.data, settings);
+
       const nextPostId =
-        initialPostId ?? selectedPostId ?? feedResponse.data[0]?.id ?? null;
+        initialPostId ?? selectedPostId ?? visibleFeed[0]?.id ?? null;
       setSelectedPostId(nextPostId);
 
       if (nextPostId) {
@@ -123,14 +142,15 @@ const CommentsScreen = () => {
     } catch (error) {
       console.error("Comments sync failed", error);
       setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to load comments from the backend.",
+        getFriendlyErrorMessage(
+          error,
+          "Unable to load comments from the backend.",
+        ),
       );
     } finally {
       setRefreshing(false);
     }
-  }, [initialPostId, selectedPostId]);
+  }, [initialPostId, selectedPostId, settings, token]);
 
   const loadThread = useCallback(async (postId: number) => {
     setSelectedPostId(postId);
@@ -141,7 +161,7 @@ const CommentsScreen = () => {
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "Unable to load thread.",
+        getFriendlyErrorMessage(error, "Unable to load thread."),
       );
     } finally {
       setRefreshing(false);
@@ -153,14 +173,63 @@ const CommentsScreen = () => {
   }, [loadComments]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentUser = async () => {
+      if (!token) {
+        setCurrentUserId(null);
+        return;
+      }
+
+      try {
+        const response = await getMe(token);
+        if (cancelled) {
+          return;
+        }
+
+        const parsedUserId = Number(
+          response.data.access?.userId ?? response.data.profile.id,
+        );
+        setCurrentUserId(Number.isFinite(parsedUserId) ? parsedUserId : null);
+      } catch {
+        if (!cancelled) {
+          setCurrentUserId(null);
+        }
+      }
+    };
+
+    void loadCurrentUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (initialPostId) {
       loadThread(initialPostId);
     }
   }, [initialPostId, loadThread]);
 
+  const canManageSelectedPost = useMemo(() => {
+    if (!selectedPost) {
+      return false;
+    }
+
+    if (selectedPost.isOwner) {
+      return true;
+    }
+
+    if (currentUserId == null || selectedPost.userId == null) {
+      return false;
+    }
+
+    return Number(selectedPost.userId) === currentUserId;
+  }, [currentUserId, selectedPost]);
+
   const submitComment = useCallback(async () => {
     if (!token || !selectedPostId) {
-      setStatusMessage("Connect your wallet before commenting.");
+      setStatusMessage("Your session expired. Log in again to continue.");
       return;
     }
 
@@ -181,12 +250,48 @@ const CommentsScreen = () => {
       await loadThread(selectedPostId);
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "Unable to post comment.",
+        getFriendlyErrorMessage(error, "Unable to post comment."),
       );
     } finally {
       setSubmitting(false);
     }
   }, [draft, loadThread, selectedPostId, token]);
+
+  const confirmDeletePost = useCallback(() => {
+    if (!token || !selectedPost || !canManageSelectedPost || deletingPostId) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete post",
+      "This will remove your post from the thread and feed. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingPostId(selectedPost.id);
+            try {
+              await deletePost(token, selectedPost.id);
+              setPosts((current) =>
+                current.filter((item) => item.id !== selectedPost.id),
+              );
+              setSelectedPostId(null);
+              setComments([]);
+              setStatusMessage("Post deleted.");
+            } catch (error) {
+              setStatusMessage(
+                getFriendlyErrorMessage(error, "Unable to delete the post."),
+              );
+            } finally {
+              setDeletingPostId(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [canManageSelectedPost, deletingPostId, selectedPost, token]);
 
   const heroStats = [
     {
@@ -201,34 +306,37 @@ const CommentsScreen = () => {
     },
     {
       icon: "shield-checkmark-outline" as const,
-      label: isConnected ? "Ready to reply" : "Read-only mode",
+      label: token ? "Ready to reply" : "Session needed",
       color: COLORS.gray,
     },
   ];
 
   return (
     <ScreenSurface style={styles.container}>
+      <View style={styles.heroDock}>
+        <HeroHeading
+          title="Comments"
+          subtitle={
+            selectedPost?.body || "Open a thread and drop fast replies."
+          }
+          artSection="comments"
+          ctaLabel="Refresh"
+          ctaIcon="refresh"
+          onPressCta={loadComments}
+          stats={heroStats}
+          subtitleLines={2}
+        />
+      </View>
+
       <FlatList
         data={sortedComments}
-        keyExtractor={(item) => `${item.id}`}
+        keyExtractor={(item: CommentItem) => `${item.id}`}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadComments} />
         }
         contentContainerStyle={{ paddingBottom: 140 }}
         ListHeaderComponent={
-          <View style={styles.listHeader}>
-            <HeroHeading
-              title="Comments"
-              subtitle={
-                selectedPost?.body ||
-                "Pick a post, read the thread, and reply from one place."
-              }
-              ctaLabel="Refresh"
-              ctaIcon="refresh"
-              onPressCta={loadComments}
-              stats={heroStats}
-            />
-
+          <View style={styles.listHeaderBody}>
             {statusMessage && (
               <View style={styles.statusBanner}>
                 <Ionicons
@@ -246,35 +354,45 @@ const CommentsScreen = () => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chipsRow}
             >
-              {posts.map((post) => {
+              {posts.map((post: FeedPost) => {
                 const active = post.id === selectedPostId;
                 return (
-                  <TouchableOpacity
+                  <Animatable.View
                     key={post.id}
-                    style={[styles.postChip, active && styles.postChipActive]}
-                    onPress={() => loadThread(post.id)}
+                    animation="fadeInUp"
+                    duration={320}
+                    useNativeDriver
                   >
-                    <Text
-                      style={[
-                        styles.postChipText,
-                        active && styles.postChipTextActive,
-                      ]}
-                      numberOfLines={2}
+                    <TouchableOpacity
+                      style={[styles.postChip, active && styles.postChipActive]}
+                      onPress={() => loadThread(post.id)}
                     >
-                      {post.body}
-                    </Text>
-                  </TouchableOpacity>
+                      <SectionArt
+                        section={
+                          post.pollOptions?.length ? "polls" : "comments"
+                        }
+                        size="sm"
+                        animated={active}
+                      />
+                      <Text
+                        style={[
+                          styles.postChipText,
+                          active && styles.postChipTextActive,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {post.body}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animatable.View>
                 );
               })}
             </ScrollView>
 
             <Text style={styles.sectionLabel}>Recent activity</Text>
-            <Text style={styles.activityLead}>
-              Fresh posts and replies moving through the feed.
-            </Text>
-            <View style={styles.recentCard}>
+            <View style={styles.recentList}>
               {recentComments.length ? (
-                recentComments.map((item, index) => (
+                recentComments.map((item: CommentItem, index: number) => (
                   <TouchableOpacity
                     key={item.id}
                     style={[
@@ -284,20 +402,29 @@ const CommentsScreen = () => {
                     ]}
                     onPress={() => loadThread(item.postId)}
                   >
-                    <View style={styles.recentMetaRow}>
-                      <Text style={styles.recentMetaLabel}>
-                        Thread #{item.postId}
-                      </Text>
-                      <Text style={styles.recentMetaTime}>
-                        {formatRelativeTime(item.createdAt)}
-                      </Text>
+                    <View style={styles.recentVisualRow}>
+                      <SectionArt
+                        section="comments"
+                        size="sm"
+                        animated={false}
+                      />
+                      <View style={styles.recentContent}>
+                        <View style={styles.recentMetaRow}>
+                          <Text style={styles.recentMetaLabel}>
+                            Thread #{item.postId}
+                          </Text>
+                          <Text style={styles.recentMetaTime}>
+                            {formatRelativeTime(item.createdAt)}
+                          </Text>
+                        </View>
+                        <Text style={styles.recentPreview} numberOfLines={1}>
+                          {item.postPreview}
+                        </Text>
+                        <Text style={styles.recentMessage} numberOfLines={2}>
+                          {item.message}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={styles.recentPreview} numberOfLines={1}>
-                      {item.postPreview}
-                    </Text>
-                    <Text style={styles.recentMessage} numberOfLines={2}>
-                      {item.message}
-                    </Text>
                   </TouchableOpacity>
                 ))
               ) : (
@@ -308,16 +435,36 @@ const CommentsScreen = () => {
             </View>
 
             {selectedPost && (
-              <View style={styles.threadSnapshotCard}>
+              <View style={styles.threadSnapshotSection}>
                 <View style={styles.threadSnapshotHeader}>
                   <Text style={styles.sectionLabel}>Thread</Text>
                   <Text style={styles.threadSnapshotTime}>
                     {formatRelativeTime(selectedPost.createdAt)}
                   </Text>
                 </View>
-                <Text style={styles.threadSnapshotBody}>
-                  {selectedPost.body}
-                </Text>
+                <View style={styles.threadHeroRow}>
+                  <SectionArt section={threadArtSection} size="md" />
+                  <View style={styles.threadHeroCopy}>
+                    <Text style={styles.threadSnapshotBody} numberOfLines={3}>
+                      {selectedPost.body}
+                    </Text>
+                    <Text style={styles.threadSnapshotNote}>
+                      {getThreadTone(selectedPost, comments.length)}
+                    </Text>
+                    {canManageSelectedPost ? (
+                      <TouchableOpacity
+                        style={styles.deletePostBtn}
+                        onPress={confirmDeletePost}
+                      >
+                        <Text style={styles.deletePostBtnText}>
+                          {deletingPostId === selectedPost.id
+                            ? "Deleting..."
+                            : "Delete post"}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
                 <View style={styles.threadSnapshotStats}>
                   <View style={styles.threadStatPill}>
                     <Ionicons
@@ -350,9 +497,6 @@ const CommentsScreen = () => {
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.threadSnapshotNote}>
-                  {getThreadTone(selectedPost, comments.length)}
-                </Text>
               </View>
             )}
 
@@ -381,7 +525,7 @@ const CommentsScreen = () => {
               </View>
             </View>
 
-            <View style={styles.composerCard}>
+            <View style={styles.composerSection}>
               <Text style={styles.sectionLabel}>Write a reply</Text>
               <View style={styles.promptRow}>
                 {QUICK_PROMPTS.map((prompt) => (
@@ -389,7 +533,7 @@ const CommentsScreen = () => {
                     key={prompt}
                     style={styles.promptChip}
                     onPress={() =>
-                      setDraft((current) => {
+                      setDraft((current: string) => {
                         const next = current ? `${current} ${prompt}` : prompt;
                         return next.slice(0, COMMENT_LIMIT);
                       })
@@ -402,20 +546,20 @@ const CommentsScreen = () => {
               <TextInput
                 style={styles.input}
                 placeholder={
-                  isConnected
+                  token
                     ? "Write an anonymous reply..."
-                    : "Connect wallet to reply"
+                    : "Log in again to reply"
                 }
                 placeholderTextColor={COLORS.gray}
                 value={draft}
                 onChangeText={setDraft}
-                editable={isConnected && !submitting}
+                editable={Boolean(token) && !submitting}
                 multiline
                 maxLength={COMMENT_LIMIT}
               />
               <View style={styles.composerMetaRow}>
                 <Text style={styles.composerMetaText}>
-                  Keep replies sharp, useful, and anonymous.
+                  Sharp and anonymous.
                 </Text>
                 <Text style={styles.composerMetaText}>
                   {draft.trim().length}/{COMMENT_LIMIT}
@@ -424,11 +568,11 @@ const CommentsScreen = () => {
               <TouchableOpacity
                 style={[
                   styles.sendBtn,
-                  (!isConnected || !draft.trim() || submitting) &&
+                  (!token || !draft.trim() || submitting) &&
                     styles.sendBtnDisabled,
                 ]}
                 onPress={submitComment}
-                disabled={!isConnected || !draft.trim() || submitting}
+                disabled={!token || !draft.trim() || submitting}
               >
                 <Ionicons name="send-outline" size={18} color={COLORS.text} />
                 <Text style={styles.sendBtnText}>
@@ -437,18 +581,16 @@ const CommentsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.rulesCard}>
+            <View style={styles.rulesSection}>
               <Text style={styles.rulesTitle}>Thread guide</Text>
               <Text style={styles.rulesText}>
-                Add context, verify details when you can, and avoid exposing
-                real identities.
+                Add context. Verify when you can. Keep identities out.
               </Text>
             </View>
           </View>
         }
-        renderItem={({ item, index }) => (
-          <View style={styles.commentCard}>
-            <View style={styles.commentAccent} />
+        renderItem={({ item, index }: { item: CommentItem; index: number }) => (
+          <View style={styles.commentRowItem}>
             <View style={styles.commentTopRow}>
               <View style={styles.commentHeader}>
                 <View style={styles.avatarBadge}>
@@ -459,7 +601,9 @@ const CommentsScreen = () => {
                   />
                 </View>
                 <View>
-                  <Text style={styles.anonId}>Anonymous #{item.id}</Text>
+                  <Text style={styles.anonId}>
+                    {item.authorName?.trim() || `u.comment ${item.id}`}
+                  </Text>
                   <Text style={styles.commentTime}>
                     {formatRelativeTime(item.createdAt)}
                   </Text>
@@ -494,7 +638,9 @@ const CommentsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, paddingBottom: 120 },
+  heroDock: { marginBottom: 4 },
   listHeader: { marginBottom: 16 },
+  listHeaderBody: { gap: 0 },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -521,15 +667,16 @@ const styles = StyleSheet.create({
   },
   postChip: {
     width: Math.min(Dimensions.get("window").width * 0.48, 200),
-    backgroundColor: COLORS.card,
+    backgroundColor: "#09090C",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 14,
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
+    gap: 10,
   },
   postChipActive: {
     borderColor: COLORS.primary,
@@ -537,19 +684,21 @@ const styles = StyleSheet.create({
   },
   postChipText: { color: COLORS.gray, ...TYPOGRAPHY.label },
   postChipTextActive: { color: COLORS.text },
-  recentCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
+  recentList: {
     gap: 10,
     marginBottom: 18,
   },
   recentItem: {
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: 10,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    paddingBottom: 12,
+  },
+  recentVisualRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  recentContent: {
+    flex: 1,
   },
   recentItemLast: {
     borderBottomWidth: 0,
@@ -570,14 +719,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   recentMessage: { color: COLORS.text, ...TYPOGRAPHY.label },
-  threadSnapshotCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
+  threadSnapshotSection: {
+    paddingBottom: 18,
     gap: 12,
     marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   threadSnapshotHeader: {
     flexDirection: "row",
@@ -586,6 +733,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   threadSnapshotTime: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  threadHeroRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  threadHeroCopy: {
+    flex: 1,
+    gap: 8,
+  },
   threadSnapshotBody: { color: COLORS.text, ...TYPOGRAPHY.body },
   threadSnapshotStats: {
     flexDirection: "row",
@@ -599,12 +755,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: "#101015",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   threadStatText: { color: COLORS.text, ...TYPOGRAPHY.meta },
   threadSnapshotNote: { color: COLORS.gray, ...TYPOGRAPHY.label },
+  deletePostBtn: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: `${CONCERN_COLOR}40`,
+    backgroundColor: `${CONCERN_COLOR}14`,
+    shadowColor: CONCERN_COLOR,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  deletePostBtnText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+  },
   threadToolbar: {
     marginBottom: 18,
   },
@@ -618,8 +796,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
   },
   sortChipActive: {
     borderColor: `${COLORS.primary}45`,
@@ -627,13 +805,11 @@ const styles = StyleSheet.create({
   },
   sortChipText: { color: COLORS.gray, ...TYPOGRAPHY.meta },
   sortChipTextActive: { color: COLORS.text },
-  composerCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
+  composerSection: {
+    paddingBottom: 18,
     marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   promptRow: {
     flexDirection: "row",
@@ -657,8 +833,8 @@ const styles = StyleSheet.create({
     minHeight: 92,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.02)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
     color: COLORS.text,
     padding: 14,
     textAlignVertical: "top",
@@ -687,34 +863,18 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.55 },
   sendBtnText: { color: COLORS.text, ...TYPOGRAPHY.button },
-  rulesCard: {
-    backgroundColor: `${COLORS.secondary}12`,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: `${COLORS.secondary}22`,
-    padding: 14,
+  rulesSection: {
+    paddingBottom: 12,
     marginBottom: 12,
     gap: 6,
   },
-  rulesTitle: { color: COLORS.secondary, ...TYPOGRAPHY.label },
+  rulesTitle: { color: COLORS.text, ...TYPOGRAPHY.label },
   rulesText: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  commentCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
+  commentRowItem: {
+    paddingVertical: 14,
     marginBottom: 12,
-    position: "relative",
-    overflow: "hidden",
-  },
-  commentAccent: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 3,
-    backgroundColor: `${COLORS.primary}80`,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
   commentTopRow: {
     flexDirection: "row",
@@ -732,9 +892,9 @@ const styles = StyleSheet.create({
     width: Math.min(Dimensions.get("window").width * 0.09, 36),
     height: Math.min(Dimensions.get("window").width * 0.09, 36),
     borderRadius: Math.min(Dimensions.get("window").width * 0.045, 18),
-    backgroundColor: `${COLORS.primary}18`,
+    backgroundColor: "#101015",
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
