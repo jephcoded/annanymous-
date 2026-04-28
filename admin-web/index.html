@@ -341,7 +341,7 @@
         <div class="sidebar-meta">
           <div class="meta-row">
             <div class="meta-key">API Base</div>
-            <div class="meta-value mono" id="apiOriginText">https://annanymous.onrender.com/api/v1</div>
+            <div class="meta-value mono" id="apiOriginText">/api/v1</div>
           </div>
           <div class="meta-row">
             <div class="meta-key">Connection</div>
@@ -362,7 +362,7 @@
         <div class="config-bar">
           <label class="field">
             <span class="label">API Base URL</span>
-            <input class="input mono" id="apiBaseInput" value="https://annanymous.onrender.com/api/v1">
+            <input class="input mono" id="apiBaseInput" value="/api/v1">
           </label>
           <label class="field">
             <span class="label">Search Users</span>
@@ -553,10 +553,17 @@
   <script>
     (() => {
       const STORAGE_KEY = "ananymous.admin.standalone";
-      const RENDER_API_BASE = "https://annanymous.onrender.com/api/v1";
+      const RENDER_API_BASE = "https://annanymous-o8qp.onrender.com/api/v1";
       const LOCAL_API_BASE = "http://127.0.0.1:4000/api/v1";
       const LOCAL_PROXY_API_BASE = `${window.location.origin}/api/v1`;
-      const DEFAULT_API_BASE = ["127.0.0.1", "localhost"].includes(window.location.hostname)
+      const HOSTED_PROXY_PROTOCOLS = ["http:", "https:"];
+      const DIRECT_API_BASES = [
+        RENDER_API_BASE,
+        "https://annanymous.onrender.com/api/v1",
+        LOCAL_API_BASE,
+        "http://localhost:4000/api/v1",
+      ];
+      const DEFAULT_API_BASE = HOSTED_PROXY_PROTOCOLS.includes(window.location.protocol)
         ? LOCAL_PROXY_API_BASE
         : RENDER_API_BASE;
       const LEGACY_LOCAL_API_BASE = "http://localhost:4000/api/v1";
@@ -774,10 +781,16 @@
           if (typeof parsed?.userBannedOnly === "boolean") state.userBannedOnly = parsed.userBannedOnly;
         } catch {}
 
+        const isHostedPage = HOSTED_PROXY_PROTOCOLS.includes(window.location.protocol);
+        const shouldUseProxyOnHostedPage =
+          isHostedPage &&
+          (!state.apiBase || DIRECT_API_BASES.includes(state.apiBase));
+
         if (
+          shouldUseProxyOnHostedPage ||
           !state.apiBase ||
           (["127.0.0.1", "localhost"].includes(window.location.hostname) &&
-            [RENDER_API_BASE, LOCAL_API_BASE, LEGACY_LOCAL_API_BASE].includes(state.apiBase)) ||
+            DIRECT_API_BASES.includes(state.apiBase)) ||
           state.apiBase === LEGACY_LOCAL_API_BASE
         ) {
           state.apiBase = DEFAULT_API_BASE;
