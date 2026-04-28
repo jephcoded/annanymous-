@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -96,6 +96,8 @@ const HomeScreen = () => {
   const [activeFeedTab, setActiveFeedTab] = useState<FeedTab>("For you");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const commentsCacheRef = useRef<Record<number, CommentItem[]>>({});
+  const activeCommentPostIdRef = useRef<number | null>(null);
 
   const isCompact = width < 380;
   const topInset = insets.top + (isCompact ? 8 : 10);
@@ -316,36 +318,59 @@ const HomeScreen = () => {
     }
   }, []);
 
-  const loadInlineComments = useCallback(async (postId: number) => {
-    setCommentsLoading(true);
+  const loadInlineComments = useCallback(async (
+    postId: number,
+    options?: { showLoader?: boolean },
+  ) => {
+    if (options?.showLoader !== false) {
+      setCommentsLoading(true);
+    }
+
     try {
       const response = await getCommentsByPost(postId);
-      setSheetComments(response.data);
-      setLoadError(null);
+      commentsCacheRef.current[postId] = response.data;
+
+      if (activeCommentPostIdRef.current === postId) {
+        setSheetComments(response.data);
+        setLoadError(null);
+      }
     } catch (error) {
-      setLoadError(getFriendlyErrorMessage(error, "Unable to load comments."));
-      setSheetComments([]);
+      if (activeCommentPostIdRef.current === postId) {
+        setLoadError(
+          getFriendlyErrorMessage(error, "Unable to load comments."),
+        );
+        setSheetComments([]);
+      }
     } finally {
-      setCommentsLoading(false);
+      if (activeCommentPostIdRef.current === postId) {
+        setCommentsLoading(false);
+      }
     }
   }, []);
 
   const openCommentsSheet = useCallback(
     (post: FeedPost) => {
       setActionPost(null);
+      activeCommentPostIdRef.current = post.id;
       setCommentPost(post);
       setCommentDraft("");
-      setSheetComments([]);
-      setCommentsLoading(true);
-      void loadInlineComments(post.id);
+
+      const cachedComments = commentsCacheRef.current[post.id];
+      setSheetComments(cachedComments || []);
+      setCommentsLoading(!cachedComments);
+
+      void loadInlineComments(post.id, {
+        showLoader: !cachedComments,
+      });
     },
     [loadInlineComments],
   );
 
   const closeCommentsSheet = useCallback(() => {
+    activeCommentPostIdRef.current = null;
     setCommentPost(null);
-    setSheetComments([]);
     setCommentDraft("");
+    setCommentsLoading(false);
   }, []);
 
   const submitComment = useCallback(async () => {
@@ -361,12 +386,13 @@ const HomeScreen = () => {
 
     setCommentSubmitting(true);
     try {
-      await createComment(
+      const response = await createComment(
         token,
         commentPost.id,
         message,
         buildContentRecord(message),
       );
+
       setCommentDraft("");
       setPosts((current) =>
         current.map((post) =>
@@ -375,7 +401,14 @@ const HomeScreen = () => {
             : post,
         ),
       );
-      await loadInlineComments(commentPost.id);
+
+      setSheetComments((current) => {
+        const next = [...current, response.data];
+        commentsCacheRef.current[commentPost.id] = next;
+        return next;
+      });
+
+      void loadInlineComments(commentPost.id, { showLoader: false });
     } catch (error) {
       setLoadError(getFriendlyErrorMessage(error, "Unable to post comment."));
     } finally {
@@ -771,7 +804,7 @@ const HomeScreen = () => {
                   <Ionicons
                     name="chatbubble-outline"
                     size={18}
-                    color={HOME_COLORS.accent}
+                    color={HOME_COLORS.purple}
                   />
                   <Text style={styles.sheetActionText}>Open comments</Text>
                 </TouchableOpacity>
@@ -782,7 +815,7 @@ const HomeScreen = () => {
                   <Ionicons
                     name="paper-plane-outline"
                     size={18}
-                    color={HOME_COLORS.accent}
+                    color={HOME_COLORS.purple}
                   />
                   <Text style={styles.sheetActionText}>Share post</Text>
                 </TouchableOpacity>
@@ -794,7 +827,7 @@ const HomeScreen = () => {
                     <Ionicons
                       name="trash-outline"
                       size={18}
-                      color={HOME_COLORS.accent}
+                      color={HOME_COLORS.purple}
                     />
                     <Text style={styles.sheetActionText}>Delete post</Text>
                   </TouchableOpacity>
@@ -874,15 +907,6 @@ const HomeScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {commentPost ? (
-                <View style={styles.commentPostPreview}>
-                  <Text style={styles.commentPreviewAuthor}>Current post</Text>
-                  <Text style={styles.commentPreviewText} numberOfLines={2}>
-                    {commentPost.body || "No message provided."}
-                  </Text>
-                </View>
-              ) : null}
-
               <FlatList
                 data={sheetComments}
                 keyExtractor={(item) => `${item.id}`}
@@ -908,7 +932,7 @@ const HomeScreen = () => {
                       <Ionicons
                         name="chatbubble-ellipses-outline"
                         size={14}
-                        color={HOME_COLORS.text}
+                        color={HOME_COLORS.purple}
                       />
                     </View>
                     <View style={styles.commentBodyWrap}>
@@ -1350,7 +1374,7 @@ const styles = StyleSheet.create({
     maxHeight: "86%",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    backgroundColor: "#050507",
+    backgroundColor: "#06060A",
     paddingHorizontal: 18,
     paddingTop: 10,
     paddingBottom: 18,
@@ -1379,7 +1403,7 @@ const styles = StyleSheet.create({
   sheetSubtitle: {
     color: HOME_COLORS.muted,
     ...TYPOGRAPHY.meta,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   sheetCloseBtn: {
     width: 34,
@@ -1398,9 +1422,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: HOME_COLORS.surfaceSoft,
+    backgroundColor: "rgba(139,61,255,0.08)",
     borderWidth: 1,
-    borderColor: HOME_COLORS.stroke,
+    borderColor: "rgba(139,61,255,0.18)",
     marginBottom: 10,
   },
   sheetActionText: {
@@ -1429,15 +1453,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   commentsListContent: {
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   commentRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 12,
-    paddingBottom: 12,
+    gap: 12,
+    marginBottom: 10,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomColor: "rgba(139,61,255,0.12)",
   },
   commentAvatar: {
     width: 34,
@@ -1445,9 +1469,9 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0A0A0D",
+    backgroundColor: "rgba(139,61,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(139,61,255,0.16)",
   },
   commentBodyWrap: {
     flex: 1,
@@ -1456,16 +1480,16 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   commentBodyText: {
-    color: "#FFF7F2",
+    color: "#F7F2FF",
     ...TYPOGRAPHY.label,
     lineHeight: 22,
   },
   commentAuthor: {
-    color: "#FFF0E7",
+    color: HOME_COLORS.purple,
     fontWeight: "800",
   },
   commentMeta: {
-    color: "#BC9D99",
+    color: "#A58FD0",
     ...TYPOGRAPHY.meta,
   },
   commentEmptyText: {
@@ -1478,23 +1502,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
-    paddingTop: 10,
-    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingHorizontal: 0,
     marginTop: 6,
-    borderRadius: 22,
-    backgroundColor: "#08080B",
+    borderRadius: 0,
+    backgroundColor: "transparent",
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
+    borderTopColor: "rgba(139,61,255,0.12)",
   },
   commentInput: {
     flex: 1,
     minHeight: 46,
     maxHeight: 110,
     borderRadius: 18,
-    backgroundColor: "#0E0E12",
+    backgroundColor: "rgba(255,255,255,0.02)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-    color: "#FFF7F2",
+    borderColor: "rgba(139,61,255,0.14)",
+    color: "#F7F2FF",
     ...TYPOGRAPHY.label,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1505,12 +1529,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#121218",
+    backgroundColor: HOME_COLORS.purple,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: HOME_COLORS.purple,
   },
   commentSendText: {
-    color: "#FFF0E7",
+    color: "#F7F2FF",
     ...TYPOGRAPHY.label,
   },
   previewBackdrop: {

@@ -1,36 +1,58 @@
-import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import {
-  DefaultTheme,
-  NavigationContainer,
+    DefaultTheme,
+    NavigationContainer,
+    NavigatorScreenParams,
+    type LinkingOptions,
 } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { StyleSheet, View } from "react-native";
+import * as ExpoLinking from "expo-linking";
+import React, { useMemo } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import ChatDots from "react-native-bootstrap-icons/icons/chat-dots";
 import ChatDotsFill from "react-native-bootstrap-icons/icons/chat-dots-fill";
 import House from "react-native-bootstrap-icons/icons/house";
 import HouseFill from "react-native-bootstrap-icons/icons/house-fill";
 import PencilFill from "react-native-bootstrap-icons/icons/pencil-fill";
 import PencilSquare from "react-native-bootstrap-icons/icons/pencil-square";
+import ShieldLock from "react-native-bootstrap-icons/icons/shield-lock";
+import ShieldLockFill from "react-native-bootstrap-icons/icons/shield-lock-fill";
 
 import { useWallet } from "./contexts/WalletContext";
-import CommentsScreen from "./screens/CommentsScreen";
-import CommunitiesScreen from "./screens/communities/CommunitiesScreen";
-import CommunityChatScreen from "./screens/communities/CommunityChatScreen";
-import CreateCommunityScreen from "./screens/communities/CreateCommunityScreen";
-import CreatePostScreen from "./screens/CreatePostScreen";
-import DiscoverScreen from "./screens/DiscoverScreen";
-import HomeScreen from "./screens/HomeScreen";
-import PollScreen from "./screens/PollScreen";
-import WalletScreen from "./screens/WalletScreen";
-import { COLORS, TYPOGRAPHY } from "./theme";
+import { COLORS, getAppAppearance, TYPOGRAPHY } from "./theme";
 
-const Tab = createBottomTabNavigator();
-const CommunityStack = createStackNavigator();
-const HomeStack = createStackNavigator();
-const PostStack = createStackNavigator();
+type HomeStackParamList = {
+  HomeMain: undefined;
+};
+
+type PostStackParamList = {
+  Composer: undefined;
+  Polls: undefined;
+};
+
+type CommunityStackParamList = {
+  CommunitiesMain: undefined;
+  CreateCommunity: undefined;
+  CommunityChat:
+    | {
+        communityId?: number;
+        communityName?: string;
+      }
+    | undefined;
+};
+
+type RootTabParamList = {
+  Home: NavigatorScreenParams<HomeStackParamList>;
+  Post: NavigatorScreenParams<PostStackParamList>;
+  Communities: NavigatorScreenParams<CommunityStackParamList>;
+  Wallet: undefined;
+};
+
+const Tab = createBottomTabNavigator<RootTabParamList>();
+const CommunityStack = createStackNavigator<CommunityStackParamList>();
+const HomeStack = createStackNavigator<HomeStackParamList>();
+const PostStack = createStackNavigator<PostStackParamList>();
 
 function CommunityStackScreen() {
   return (
@@ -42,15 +64,25 @@ function CommunityStackScreen() {
         cardStyle: { backgroundColor: "transparent" },
       }}
     >
-      <CommunityStack.Screen name="CommunitiesMain" component={CommunitiesScreen} />
+      <CommunityStack.Screen
+        name="CommunitiesMain"
+        getComponent={() =>
+          require("./screens/communities/CommunitiesScreen").default
+        }
+        options={{ headerShown: false }}
+      />
       <CommunityStack.Screen
         name="CreateCommunity"
-        component={CreateCommunityScreen}
+        getComponent={() =>
+          require("./screens/communities/CreateCommunityScreen").default
+        }
         options={{ title: "Create Community" }}
       />
       <CommunityStack.Screen
         name="CommunityChat"
-        component={CommunityChatScreen}
+        getComponent={() =>
+          require("./screens/communities/CommunityChatScreen").default
+        }
         options={{ title: "Community Chat" }}
       />
     </CommunityStack.Navigator>
@@ -60,8 +92,10 @@ function CommunityStackScreen() {
 function HomeStackScreen() {
   return (
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
-      <HomeStack.Screen name="HomeMain" component={HomeScreen} />
-      <HomeStack.Screen name="Discover" component={DiscoverScreen} />
+      <HomeStack.Screen
+        name="HomeMain"
+        getComponent={() => require("./screens/HomeScreen").default}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -79,11 +113,13 @@ function PostStackScreen() {
     >
       <PostStack.Screen
         name="Composer"
-        component={CreatePostScreen}
+        getComponent={() => require("./screens/CreatePostScreen").default}
         options={{ headerShown: false }}
       />
-      <PostStack.Screen name="Comments" component={CommentsScreen} />
-      <PostStack.Screen name="Polls" component={PollScreen} />
+      <PostStack.Screen
+        name="Polls"
+        getComponent={() => require("./screens/PollScreen").default}
+      />
     </PostStack.Navigator>
   );
 }
@@ -94,28 +130,77 @@ const ICONS = {
   Communities: { focused: ChatDotsFill, default: ChatDots },
 } as const;
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: "transparent",
+const linking: LinkingOptions<RootTabParamList> = {
+  prefixes: [ExpoLinking.createURL("/"), "ananymous://"],
+  config: {
+    screens: {
+      Home: {
+        screens: {
+          HomeMain: "home",
+        },
+      },
+      Post: {
+        screens: {
+          Composer: "post",
+          Polls: "post/polls",
+        },
+      },
+      Communities: {
+        screens: {
+          CommunitiesMain: "communities",
+          CreateCommunity: "communities/create",
+          CommunityChat: {
+            path: "communities/chat/:communityId?/:communityName?",
+            parse: {
+              communityId: (value: string) => Number(value),
+            },
+          },
+        },
+      },
+      Wallet: "wallet",
+    },
   },
 };
 
 const AppNavigator = () => {
-  const { isConnected } = useWallet();
+  const { settings } = useWallet();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 390;
+  const appearance = getAppAppearance(settings?.theme);
+  const navTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        background: "transparent",
+      },
+    }),
+    [],
+  );
 
   return (
     <View style={styles.shell}>
       <LinearGradient
-        colors={["#151515", COLORS.background]}
+        colors={appearance.shellGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.6, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      <View pointerEvents="none" style={styles.shellGlowPrimary} />
-      <View pointerEvents="none" style={styles.shellGlowSecondary} />
-      <NavigationContainer theme={navTheme}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.shellGlowPrimary,
+          { backgroundColor: appearance.shellGlowPrimary },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.shellGlowSecondary,
+          { backgroundColor: appearance.shellGlowSecondary },
+        ]}
+      />
+      <NavigationContainer linking={linking} theme={navTheme}>
         <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: false,
@@ -126,40 +211,44 @@ const AppNavigator = () => {
             tabBarStyle: {
               backgroundColor: "transparent",
               borderTopColor: "transparent",
-              height: 84,
-              borderRadius: 34,
-              paddingHorizontal: 14,
-              paddingTop: 10,
-              paddingBottom: 12,
+              height: isCompact ? 74 : 78,
+              borderRadius: isCompact ? 24 : 28,
+              paddingHorizontal: isCompact ? 8 : 10,
+              paddingTop: isCompact ? 7 : 8,
+              paddingBottom: isCompact ? 9 : 10,
               position: "absolute",
-              left: 16,
-              right: 16,
-              bottom: 28,
+              left: isCompact ? 14 : 18,
+              right: isCompact ? 14 : 18,
+              bottom: isCompact ? 16 : 20,
               shadowColor: "#000",
-              shadowOpacity: 0.35,
-              shadowRadius: 22,
-              shadowOffset: { width: 0, height: 14 },
+              shadowOpacity: 0.28,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 10 },
               elevation: 16,
               borderWidth: 1,
               borderColor: "rgba(255,255,255,0.08)",
             },
             tabBarBackground: () => (
               <LinearGradient
-                colors={["rgba(24,24,27,0.98)", "rgba(7,7,8,0.98)"]}
+                colors={appearance.navGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 34 }]}
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  { borderRadius: isCompact ? 24 : 28 },
+                ]}
               />
             ),
-            tabBarActiveTintColor: COLORS.text,
-            tabBarInactiveTintColor: COLORS.gray,
+            tabBarActiveTintColor: COLORS.primary,
+            tabBarInactiveTintColor: "#8F76C8",
             tabBarShowLabel: true,
             tabBarLabelStyle: {
               ...TYPOGRAPHY.tab,
-              marginTop: -4,
+              marginTop: isCompact ? -1 : -2,
+              fontSize: isCompact ? 10 : TYPOGRAPHY.tab.fontSize,
             },
             tabBarItemStyle: {
-              borderRadius: 24,
+              borderRadius: 22,
             },
             tabBarIcon: ({ color, focused }) => {
               const isWalletRoute = route.name === "Wallet";
@@ -176,26 +265,38 @@ const AppNavigator = () => {
                 <View
                   style={{
                     backgroundColor: focused
-                      ? "rgba(255,255,255,0.10)"
+                      ? appearance.tabActiveBackground
                       : "transparent",
                     borderRadius: 18,
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
+                    paddingVertical: isCompact ? 6 : 7,
+                    paddingHorizontal: isCompact ? 10 : 11,
                     borderWidth: focused ? 1 : 0,
                     borderColor: focused
-                      ? "rgba(255,255,255,0.10)"
+                      ? appearance.tabActiveBorder
                       : "transparent",
                   }}
                 >
                   {isWalletRoute ? (
-                    <Ionicons
-                      name={focused ? "shield" : "shield-outline"}
-                      size={24}
-                      color={color}
-                    />
+                    focused ? (
+                      <ShieldLockFill
+                        width={isCompact ? 22 : 24}
+                        height={isCompact ? 22 : 24}
+                        fill={color}
+                      />
+                    ) : (
+                      <ShieldLock
+                        width={isCompact ? 22 : 24}
+                        height={isCompact ? 22 : 24}
+                        fill={color}
+                      />
+                    )
                   ) : (
                     IconComponent && (
-                      <IconComponent width={24} height={24} fill={color} />
+                      <IconComponent
+                        width={isCompact ? 22 : 24}
+                        height={isCompact ? 22 : 24}
+                        fill={color}
+                      />
                     )
                   )}
                 </View>
@@ -206,27 +307,23 @@ const AppNavigator = () => {
           <Tab.Screen
             name="Home"
             component={HomeStackScreen}
-            options={{ title: "Home" }}
+            options={{ title: "Feed" }}
           />
           <Tab.Screen
             name="Post"
             component={PostStackScreen}
             options={{ title: "Post" }}
-            listeners={({ navigation }) => ({
-              tabPress: (event) => {
-                if (!isConnected) {
-                  event.preventDefault();
-                  navigation.navigate("Wallet");
-                }
-              },
-            })}
           />
           <Tab.Screen
             name="Communities"
             component={CommunityStackScreen}
             options={{ title: "Community" }}
           />
-          <Tab.Screen name="Wallet" component={WalletScreen} />
+          <Tab.Screen
+            name="Wallet"
+            getComponent={() => require("./screens/WalletScreen").default}
+            options={{ title: "Profile" }}
+          />
         </Tab.Navigator>
       </NavigationContainer>
     </View>
@@ -242,7 +339,6 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: "rgba(255,255,255,0.06)",
   },
   shellGlowSecondary: {
     position: "absolute",
@@ -251,7 +347,6 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: "rgba(120,120,128,0.08)",
   },
 });
 

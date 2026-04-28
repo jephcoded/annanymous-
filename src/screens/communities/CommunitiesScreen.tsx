@@ -314,18 +314,18 @@ const CommunitiesScreen = () => {
                 ]}
               >
                 <View>
-                  <Text style={styles.headerEyebrow}>Community</Text>
+                  <Text style={styles.headerEyebrow}>Private access</Text>
                   <Text
                     style={[
                       styles.headerTitle,
                       isCompact && styles.headerTitleCompact,
                     ]}
                   >
-                    Find your people
+                    Community
                   </Text>
                   <Text style={styles.headerSubtitle}>
-                    Rooms, trends, and chat spaces styled to match the rest of
-                    the app.
+                    Popular groups, trending spaces, and invite-first rooms in
+                    one fast feed.
                   </Text>
                 </View>
 
@@ -366,7 +366,7 @@ const CommunitiesScreen = () => {
                     color={COLORS.primary}
                   />
                   <Text style={styles.heroMetaText}>
-                    {communities.length} active rooms
+                    {communities.length} live rooms
                   </Text>
                 </View>
                 <View style={styles.heroMetaPill}>
@@ -375,7 +375,7 @@ const CommunitiesScreen = () => {
                     size={13}
                     color={COLORS.secondary}
                   />
-                  <Text style={styles.heroMetaText}>Anonymous by default</Text>
+                  <Text style={styles.heroMetaText}>Invite-first access</Text>
                 </View>
               </View>
 
@@ -717,10 +717,17 @@ const styles = StyleSheet.create({
   surfaceCompact: { paddingHorizontal: 14 },
   content: { paddingBottom: 140 },
   heroCard: {
-    paddingBottom: 18,
+    padding: 18,
     marginBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.18)",
+    backgroundColor: "#110A1A",
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
   headerTopRow: {
     flexDirection: "row",
@@ -736,8 +743,10 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     ...TYPOGRAPHY.meta,
     marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  headerTitle: { color: COLORS.text, ...TYPOGRAPHY.heading },
+  headerTitle: { color: COLORS.text, ...TYPOGRAPHY.heading, fontSize: 30, lineHeight: 34 },
   headerTitleCompact: {
     fontSize: 24,
     lineHeight: 30,
@@ -746,7 +755,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     ...TYPOGRAPHY.label,
     marginTop: 6,
-    maxWidth: 280,
+    maxWidth: 310,
   },
   headerActions: { flexDirection: "row", gap: 10 },
   headerActionsCompact: { gap: 8 },
@@ -766,9 +775,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 7,
     borderRadius: 999,
-    backgroundColor: "#101015",
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(139,61,255,0.14)",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -804,7 +813,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(139,61,255,0.22)",
-    backgroundColor: "#0E0E12",
+    backgroundColor: "rgba(255,255,255,0.03)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -816,10 +825,12 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.button,
   },
   inviteCard: {
-    paddingBottom: 16,
+    padding: 16,
     marginBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.12)",
+    backgroundColor: "#0D0A14",
   },
   inviteTitle: {
     color: COLORS.text,
@@ -875,8 +886,9 @@ const styles = StyleSheet.create({
   tabsRow: {
     flexDirection: "row",
     gap: 24,
+    marginTop: 2,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomColor: "rgba(139,61,255,0.12)",
   },
   tabsRowCompact: { gap: 16 },
   tabButton: { paddingBottom: 10 },
@@ -897,10 +909,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#0D0D11",
+    backgroundColor: "rgba(139,61,255,0.08)",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(139,61,255,0.12)",
     padding: 14,
     marginBottom: 16,
   },
@@ -920,9 +932,12 @@ const styles = StyleSheet.create({
   loading: { marginTop: 28 },
   emptyCard: {
     alignItems: "center",
-    paddingVertical: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    paddingVertical: 28,
+    paddingHorizontal: 18,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.12)",
+    backgroundColor: "#0D0A14",
   },
   emptyTitle: {
     color: COLORS.text,
@@ -938,9 +953,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   communityCard: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    padding: 15,
+    marginBottom: 12,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.12)",
+    backgroundColor: "#0D0A14",
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   communityCardCompact: {
     paddingVertical: 12,
@@ -997,19 +1020,19 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   joinPillText: {
-    color: "#FFFFFF",
+    color: "#F7F2FF",
     ...TYPOGRAPHY.meta,
     fontSize: 11,
     lineHeight: 14,
   },
   description: {
-    color: "#ACA3BB",
+    color: "#B7A8D7",
     ...TYPOGRAPHY.label,
     fontSize: 11,
     lineHeight: 15,
   },
   descriptionMuted: {
-    color: "#8F879E",
+    color: "#8F7AAE",
     ...TYPOGRAPHY.label,
     fontSize: 11,
     lineHeight: 15,
@@ -1022,10 +1045,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 10,
-    marginBottom: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.04)",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 18,
+    backgroundColor: "#0D0A14",
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.10)",
   },
   topicBullet: {
     width: 28,
@@ -1033,7 +1059,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0E0E12",
+    backgroundColor: "rgba(139,61,255,0.12)",
   },
   topicCopy: { flex: 1 },
   topicName: {
