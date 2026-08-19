@@ -45,6 +45,7 @@ import { buildContentRecord } from "../services/decentralized";
 import { TYPOGRAPHY } from "../theme";
 import { filterPostsForSettings } from "../utils/contentPreferences";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
+import { loadSavedPostIds, persistSavedPostIds } from "../utils/savedPosts";
 
 const HOME_COLORS = {
   text: "#FBE4D8",
@@ -114,6 +115,7 @@ const HomeScreen = () => {
     {},
   );
   const [likingPostIds, setLikingPostIds] = useState<Record<number, true>>({});
+  const [savedPostIds, setSavedPostIds] = useState<Set<number>>(new Set());
   const [actionPost, setActionPost] = useState<FeedPost | null>(null);
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
   const [sheetComments, setSheetComments] = useState<CommentItem[]>([]);
@@ -132,6 +134,24 @@ const HomeScreen = () => {
   const fixedHeaderHeight =
     insets.top +
     (isCompact ? (isSearchOpen ? 164 : 118) : isSearchOpen ? 174 : 126);
+
+  useEffect(() => {
+    loadSavedPostIds().then((ids) => setSavedPostIds(new Set(ids)));
+  }, []);
+
+  const toggleSavePost = useCallback(async (post: FeedPost) => {
+    setSavedPostIds((current) => {
+      const next = new Set(current);
+      if (next.has(post.id)) {
+        next.delete(post.id);
+      } else {
+        next.add(post.id);
+      }
+
+      void persistSavedPostIds(Array.from(next));
+      return next;
+    });
+  }, []);
 
   const loadPosts = useCallback(async () => {
     setRefreshing(true);
@@ -774,7 +794,22 @@ const HomeScreen = () => {
                     size={15}
                     color={HOME_COLORS.accentSoft}
                   />
-                  <Text style={styles.metricText}>{item.downVotes}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.metricButton}
+                  onPress={() => void toggleSavePost(item)}
+                >
+                  <Ionicons
+                    name={
+                      savedPostIds.has(item.id) ? "bookmark" : "bookmark-outline"
+                    }
+                    size={15}
+                    color={
+                      savedPostIds.has(item.id)
+                        ? HOME_COLORS.purple
+                        : HOME_COLORS.accentSoft
+                    }
+                  />
                 </TouchableOpacity>
                 <View style={styles.actionSpacer} />
                 <TouchableOpacity

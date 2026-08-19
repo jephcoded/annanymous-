@@ -473,6 +473,14 @@ export const getFeed = async (params?: {
   };
 };
 
+export const getPost = async (postId: number, token?: string) =>
+  request<{ data: FeedPost }>(`/posts/${postId}`, { token }).then(
+    (response) => ({
+      ...response,
+      data: normalizeFeedPost(response.data),
+    }),
+  );
+
 export const uploadImage = async (
   token: string,
   image: { uri: string; name?: string; type?: string },

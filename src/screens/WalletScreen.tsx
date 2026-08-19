@@ -29,11 +29,13 @@ import {
     getFeed,
     getMe,
     getNotifications,
+    getPost,
     markAllNotificationsRead,
     markNotificationRead,
     updateProfile,
 } from "../services/api";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import { loadSavedPostIds, persistSavedPostIds } from "../utils/savedPosts";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
 
 const ONBOARDING_KEY = "ananymous.onboarding.complete";
@@ -55,7 +57,8 @@ type ProfileTab =
   | "appearance"
   | "content"
   | "support"
-  | "myPosts";
+  | "myPosts"
+  | "saved";
 
 const SUPPORT_EMAIL = "support@ananymous.app";
 const THEME_OPTIONS = [
@@ -150,6 +153,8 @@ const WalletScreen = () => {
   const [myPostsDeletingId, setMyPostsDeletingId] = useState<number | null>(
     null,
   );
+  const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
+  const [savedPostsLoading, setSavedPostsLoading] = useState(false);
 
   const isCompact = width < 390;
   const isSubpage = activeTab !== "overview";
@@ -238,6 +243,10 @@ const WalletScreen = () => {
           title: "My Posts",
           subtitle: "Everything you've shared, in one place.",
         },
+        saved: {
+          title: "Saved",
+          subtitle: "Posts you've bookmarked to revisit.",
+        },
       })[activeTab],
     [activeTab],
   );
@@ -320,6 +329,47 @@ const WalletScreen = () => {
       void loadMyPosts();
     }
   }, [activeTab, loadMyPosts]);
+
+  const loadSavedPosts = useCallback(async () => {
+    setSavedPostsLoading(true);
+    try {
+      const ids = await loadSavedPostIds();
+      const results = await Promise.all(
+        ids.map((id) =>
+          getPost(id, token || undefined).then(
+            (response) => response.data,
+            () => null,
+          ),
+        ),
+      );
+      const valid = results.filter((post): post is FeedPost => post !== null);
+      setSavedPosts(valid);
+
+      if (valid.length !== ids.length) {
+        await persistSavedPostIds(valid.map((post) => post.id));
+      }
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to load saved posts."),
+      );
+    } finally {
+      setSavedPostsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab === "saved") {
+      void loadSavedPosts();
+    }
+  }, [activeTab, loadSavedPosts]);
+
+  const handleUnsavePost = useCallback(async (post: FeedPost) => {
+    setSavedPosts((current) => {
+      const next = current.filter((item) => item.id !== post.id);
+      void persistSavedPostIds(next.map((item) => item.id));
+      return next;
+    });
+  }, []);
 
   const handleDeleteMyPost = useCallback(
     (post: FeedPost) => {
@@ -767,9 +817,7 @@ const WalletScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.quickActionCard}
-                  onPress={() =>
-                    setStatusMessage("Saved posts page is coming next.")
-                  }
+                  onPress={() => setActiveTab("saved")}
                 >
                   <Ionicons
                     name="bookmark-outline"
@@ -1359,6 +1407,63 @@ const WalletScreen = () => {
             )}
           </View>
         ) : null}
+
+        {activeTab === "saved" ? (
+          <View style={styles.sectionCard}>
+            {savedPostsLoading && !savedPosts.length ? (
+              <View style={styles.myPostsLoading}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.emptyText}>Loading saved posts...</Text>
+              </View>
+            ) : savedPosts.length ? (
+              savedPosts.map((post) => (
+                <View key={post.id} style={styles.myPostCard}>
+                  <Text style={styles.myPostBody} numberOfLines={4}>
+                    {post.body?.trim() || "(image post)"}
+                  </Text>
+                  <View style={styles.myPostMetaRow}>
+                    <View style={styles.myPostStat}>
+                      <Ionicons
+                        name="thumbs-up-outline"
+                        size={13}
+                        color={COLORS.gray}
+                      />
+                      <Text style={styles.myPostMetaText}>
+                        {post.upVotes}
+                      </Text>
+                    </View>
+                    <View style={styles.myPostStat}>
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={13}
+                        color={COLORS.gray}
+                      />
+                      <Text style={styles.myPostMetaText}>
+                        {post.commentCount}
+                      </Text>
+                    </View>
+                    <Text style={styles.myPostMetaText}>
+                      {post.authorName?.trim() || "Anonymous"}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.myPostSaveBtn}
+                      onPress={() => void handleUnsavePost(post)}
+                    >
+                      <Ionicons name="bookmark" size={15} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.myPostsLoading}>
+                <Ionicons name="bookmark-outline" size={24} color={COLORS.gray} />
+                <Text style={styles.emptyText}>
+                  Tap the bookmark icon on any post to save it here.
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </ScreenSurface>
   );
@@ -1594,6 +1699,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(248,113,113,0.1)",
+  },
+  myPostSaveBtn: {
+    marginLeft: "auto",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139,61,255,0.12)",
   },
   identityStrip: {
     flexDirection: "row",
