@@ -35,6 +35,43 @@ exports.createCommunity = async (req, res, next) => {
   }
 };
 
+exports.joinCommunity = async (req, res, next) => {
+  try {
+    const communityId = Number(req.params.communityId);
+    const userId = req.user.id;
+    const community = await Community.getById(communityId);
+
+    if (!community) {
+      return res
+        .status(404)
+        .json({ error: { message: "Community not found" } });
+    }
+
+    const existingMember = await Community.findMembership(communityId, userId);
+    if (existingMember?.status === "active") {
+      return res.status(200).json({ data: existingMember });
+    }
+
+    if (existingMember) {
+      const member = await Community.updateMembership(existingMember.id, {
+        status: "active",
+      });
+      return res.status(200).json({ data: member });
+    }
+
+    const member = await Community.addMember({
+      communityId,
+      userId,
+      isAdmin: false,
+      status: "active",
+    });
+
+    return res.status(201).json({ data: member });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.createInvite = async (req, res, next) => {
   try {
     const { communityId, expiresAt } = req.body;

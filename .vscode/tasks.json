@@ -1,0 +1,87 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Android Release APK",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat assembleRelease"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build Android Release APK ARM Only",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build Android Release APK ARM Only Clean Cache",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat --stop && if exist app\\build\\kotlin\\compileReleaseKotlin\\cacheable\\caches-jvm rmdir /s /q app\\build\\kotlin\\compileReleaseKotlin\\cacheable\\caches-jvm && gradlew.bat assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build Android Release APK ARM Clean",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat clean assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build Android Release APK ARM Serial",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat clean assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Build Android Release APK Prefab Fix",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"cd /d android && gradlew.bat :react-native-worklets:prefabReleasePackage --rerun-tasks -PreactNativeArchitectures=armeabi-v7a,arm64-v8a && gradlew.bat assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "EAS Build Android Preview APK",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"eas",
+				"build",
+				"--platform",
+				"android",
+				"--profile",
+				"preview",
+				"--non-interactive"
+			],
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

@@ -48,7 +48,9 @@ exports.loginWithCredentials = async (req, res, next) => {
     }
 
     const isEnvOwner = isValidAdminCredential({ email, password });
-    const member = isEnvOwner ? null : await AdminMember.authenticateMember({ email, password });
+    const member = isEnvOwner
+      ? null
+      : await AdminMember.authenticateMember({ email, password });
 
     if (!isEnvOwner && !member) {
       return res.status(401).json({
@@ -63,7 +65,13 @@ exports.loginWithCredentials = async (req, res, next) => {
     const token = jwt.sign(
       isEnvOwner
         ? { kind: "admin_panel", role: "owner", email, source: "env" }
-        : { kind: "admin_panel", role: member.role, email: member.email, source: "member", memberId: member.id },
+        : {
+            kind: "admin_panel",
+            role: member.role,
+            email: member.email,
+            source: "member",
+            memberId: member.id,
+          },
       process.env.JWT_SECRET,
       { expiresIn: "12h" },
     );
@@ -94,7 +102,8 @@ exports.getSession = async (req, res, next) => {
         role: req.user.role || "admin",
         source: req.user.source || req.user.authType || "wallet",
         adminMemberId: req.user.adminMemberId || null,
-        canManageMembers: req.user.authType === "password" && req.user.role === "owner",
+        canManageMembers:
+          req.user.authType === "password" && req.user.role === "owner",
       },
     });
   } catch (error) {
@@ -110,23 +119,32 @@ exports.listMembers = async (req, res, next) => {
 
     const members = await AdminMember.listMembers();
     const envOwner = isAdminCredentialLoginEnabled()
-      ? [{
-        id: "env-owner",
-        email: normalizeEmail(process.env.ADMIN_PANEL_EMAIL),
-        role: "owner",
-        isActive: true,
-        createdAt: null,
-        updatedAt: null,
-        lastLoginAt: null,
-        createdByMemberId: null,
-        createdByEmail: null,
-        source: "env",
-        immutable: true,
-      }]
+      ? [
+          {
+            id: "env-owner",
+            email: normalizeEmail(process.env.ADMIN_PANEL_EMAIL),
+            role: "owner",
+            isActive: true,
+            createdAt: null,
+            updatedAt: null,
+            lastLoginAt: null,
+            createdByMemberId: null,
+            createdByEmail: null,
+            source: "env",
+            immutable: true,
+          },
+        ]
       : [];
 
     res.json({
-      data: [...envOwner, ...members.map((member) => ({ ...member, source: "member", immutable: false }))],
+      data: [
+        ...envOwner,
+        ...members.map((member) => ({
+          ...member,
+          source: "member",
+          immutable: false,
+        })),
+      ],
     });
   } catch (error) {
     next(error);
@@ -183,7 +201,9 @@ exports.createMember = async (req, res, next) => {
       },
     });
 
-    res.status(201).json({ data: { ...member, source: "member", immutable: false } });
+    res
+      .status(201)
+      .json({ data: { ...member, source: "member", immutable: false } });
   } catch (error) {
     next(error);
   }
@@ -230,7 +250,10 @@ exports.deactivateMember = async (req, res, next) => {
       }
     }
 
-    const updatedMember = await AdminMember.setActiveState({ memberId: member.id, isActive: false });
+    const updatedMember = await AdminMember.setActiveState({
+      memberId: member.id,
+      isActive: false,
+    });
 
     await Admin.logActivity({
       adminUserId: req.user.id,
@@ -243,7 +266,9 @@ exports.deactivateMember = async (req, res, next) => {
       },
     });
 
-    res.json({ data: { ...updatedMember, source: "member", immutable: false } });
+    res.json({
+      data: { ...updatedMember, source: "member", immutable: false },
+    });
   } catch (error) {
     next(error);
   }
@@ -267,7 +292,10 @@ exports.activateMember = async (req, res, next) => {
       });
     }
 
-    const updatedMember = await AdminMember.setActiveState({ memberId: member.id, isActive: true });
+    const updatedMember = await AdminMember.setActiveState({
+      memberId: member.id,
+      isActive: true,
+    });
 
     await Admin.logActivity({
       adminUserId: req.user.id,
@@ -280,7 +308,9 @@ exports.activateMember = async (req, res, next) => {
       },
     });
 
-    res.json({ data: { ...updatedMember, source: "member", immutable: false } });
+    res.json({
+      data: { ...updatedMember, source: "member", immutable: false },
+    });
   } catch (error) {
     next(error);
   }

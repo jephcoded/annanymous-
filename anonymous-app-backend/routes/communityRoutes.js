@@ -9,6 +9,7 @@ router.post("/", auth, communityController.createCommunity);
 
 // Create a new community (admin/creator)
 router.post("/create", auth, communityController.createCommunity);
+router.post("/:communityId/join", auth, communityController.joinCommunity);
 
 // Create an invite link (admin only)
 router.post("/invite", auth, communityController.createInvite);

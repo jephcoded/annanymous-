@@ -1,8 +1,17 @@
 import { LinearGradient } from "expo-linear-gradient";
 import React, { ReactNode } from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import {
+    KeyboardAvoidingView,
+    Platform,
+    StyleProp,
+    StyleSheet,
+    View,
+    ViewStyle,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS } from "../theme";
+
+import { useWallet } from "../contexts/WalletContext";
+import { getAppAppearance } from "../theme";
 
 type ScreenSurfaceProps = {
   children: ReactNode;
@@ -16,36 +25,60 @@ const ScreenSurface = ({
   bleedTop = false,
 }: ScreenSurfaceProps) => {
   const insets = useSafeAreaInsets();
+  const { settings } = useWallet();
+  const appearance = getAppAppearance(settings?.theme);
+  const topPadding = bleedTop ? 0 : insets.top + 12;
+  const bottomPadding = insets.bottom + 12;
 
   return (
-    <View
+    <KeyboardAvoidingView
       style={[
         styles.root,
         {
-          paddingTop: bleedTop ? 0 : insets.top + 12,
-          paddingBottom: insets.bottom + 12,
+          paddingTop: topPadding,
+          paddingBottom: bottomPadding,
         },
         style,
       ]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={topPadding}
     >
       <LinearGradient
-        colors={["#0B0713", COLORS.background, "#040509"]}
+        colors={appearance.screenGradient}
         start={{ x: 0.1, y: 0 }}
         end={{ x: 0.95, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       <LinearGradient
-        colors={["rgba(255,255,255,0.025)", "rgba(255,255,255,0)"]}
+        colors={appearance.filmGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.8 }}
         style={styles.film}
       />
-      <View pointerEvents="none" style={styles.frame} />
-      <View pointerEvents="none" style={styles.glowTop} />
-      <View pointerEvents="none" style={styles.glowCenter} />
-      <View pointerEvents="none" style={styles.glowBottom} />
+      <View
+        pointerEvents="none"
+        style={[styles.frame, { borderColor: appearance.frameBorder }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[styles.glowTop, { backgroundColor: appearance.surfaceGlowTop }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glowCenter,
+          { backgroundColor: appearance.surfaceGlowCenter },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glowBottom,
+          { backgroundColor: appearance.surfaceGlowBottom },
+        ]}
+      />
       {children}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -61,7 +94,6 @@ const styles = StyleSheet.create({
   frame: {
     ...StyleSheet.absoluteFillObject,
     borderTopWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
   },
   glowTop: {
     position: "absolute",
@@ -70,8 +102,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: COLORS.primary + "1E",
-    opacity: 0.65,
+    opacity: 0.45,
   },
   glowCenter: {
     position: "absolute",
@@ -80,7 +111,6 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: "rgba(34,211,238,0.1)",
   },
   glowBottom: {
     position: "absolute",
@@ -89,7 +119,6 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: COLORS.secondary + "16",
   },
 });
 

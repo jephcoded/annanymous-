@@ -1,19 +1,20 @@
 const router = require("express").Router();
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
+const { authLimiter } = require("../middleware/rateLimiter");
 
-router.post("/signup", authController.signup);
-router.post("/login", authController.login);
-router.post("/challenge", authController.challenge);
-router.post("/verify", authController.verify);
+router.post("/signup", authLimiter, authController.signup);
+router.post("/login", authLimiter, authController.login);
+router.post("/challenge", authLimiter, authController.challenge);
+router.post("/verify", authLimiter, authController.verify);
 router.get("/me", authMiddleware, authController.me);
 router.patch("/profile", authMiddleware, authController.updateProfile);
 router.get("/settings", authMiddleware, authController.getSettings);
 router.patch("/settings", authMiddleware, authController.updateSettings);
 router.post(
-	"/settings/push-token",
-	authMiddleware,
-	authController.registerPushToken,
+  "/settings/push-token",
+  authMiddleware,
+  authController.registerPushToken,
 );
 
 module.exports = router;

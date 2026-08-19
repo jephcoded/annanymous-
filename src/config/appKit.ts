@@ -1,3 +1,5 @@
+import "@walletconnect/react-native-compat";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 
@@ -34,7 +36,7 @@ const storage = {
       }
     });
   },
-  async getItem(key) {
+  async getItem(key: string) {
     const value = await AsyncStorage.getItem(key);
     if (!value) {
       return undefined;
@@ -46,10 +48,10 @@ const storage = {
       return value;
     }
   },
-  async setItem(key, value) {
+  async setItem(key: string, value: unknown) {
     await AsyncStorage.setItem(key, JSON.stringify(value));
   },
-  async removeItem(key) {
+  async removeItem(key: string) {
     await AsyncStorage.removeItem(key);
   },
 };
@@ -65,9 +67,6 @@ export const ensureAppKit = () => {
     return appKitInstance;
   }
 
-  // Delay wallet native imports until the user actually opens wallet connect.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require("@walletconnect/react-native-compat");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { EthersAdapter } = require("@reown/appkit-ethers-react-native");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -84,7 +83,6 @@ export const ensureAppKit = () => {
       icons: ["https://annanymous.onrender.com"],
       redirect: {
         native: "ananymous://",
-        universal: "https://annanymous.onrender.com",
       },
     },
     adapters: [new EthersAdapter()],

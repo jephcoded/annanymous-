@@ -1,6 +1,11 @@
 const db = require("../config/db");
 
-exports.applyToPost = async ({ postId, direction, userId, decentralized = {} }) => {
+exports.applyToPost = async ({
+  postId,
+  direction,
+  userId,
+  decentralized = {},
+}) => {
   await db.query(
     `INSERT INTO votes (post_id, user_id, direction, chain_id, contract_address, transaction_hash)
      VALUES ($1, $2, $3, $4, $5, $6)
@@ -30,6 +35,7 @@ exports.applyToPost = async ({ postId, direction, userId, decentralized = {} }) 
     postId,
     upVotes: Number(aggregates.rows[0].upvotes) || 0,
     downVotes: Number(aggregates.rows[0].downvotes) || 0,
+    userVote: direction,
     decentralized: {
       chainId: decentralized.chainId || null,
       contractAddress: decentralized.contractAddress || null,
@@ -39,7 +45,33 @@ exports.applyToPost = async ({ postId, direction, userId, decentralized = {} }) 
   };
 };
 
-exports.applyToPoll = async ({ pollId, optionId, userId, decentralized = {} }) => {
+exports.removeFromPost = async ({ postId, userId }) => {
+  await db.query("DELETE FROM votes WHERE post_id = $1 AND user_id = $2", [
+    postId,
+    userId,
+  ]);
+  const aggregates = await db.query(
+    `SELECT
+       SUM(CASE WHEN direction = 'up' THEN 1 ELSE 0 END) AS upvotes,
+       SUM(CASE WHEN direction = 'down' THEN 1 ELSE 0 END) AS downvotes
+     FROM votes WHERE post_id = $1`,
+    [postId],
+  );
+
+  return {
+    postId,
+    upVotes: Number(aggregates.rows[0].upvotes) || 0,
+    downVotes: Number(aggregates.rows[0].downvotes) || 0,
+    userVote: null,
+  };
+};
+
+exports.applyToPoll = async ({
+  pollId,
+  optionId,
+  userId,
+  decentralized = {},
+}) => {
   await db.query(
     `INSERT INTO poll_votes (
        poll_id,

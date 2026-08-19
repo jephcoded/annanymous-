@@ -2,8 +2,9 @@ const router = require("express").Router();
 const adminController = require("../controllers/adminController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
+const { authLimiter } = require("../middleware/rateLimiter");
 
-router.post("/session/login", adminController.loginWithCredentials);
+router.post("/session/login", authLimiter, adminController.loginWithCredentials);
 
 router.use(authMiddleware, adminMiddleware);
 
@@ -12,7 +13,10 @@ router.get("/members", adminController.listMembers);
 router.post("/members", adminController.createMember);
 router.patch("/members/:memberId/activate", adminController.activateMember);
 router.patch("/members/:memberId/deactivate", adminController.deactivateMember);
-router.patch("/members/:memberId/password", adminController.resetMemberPassword);
+router.patch(
+  "/members/:memberId/password",
+  adminController.resetMemberPassword,
+);
 router.get("/overview", adminController.getOverview);
 router.get("/trends", adminController.getTrends);
 router.get("/users", adminController.listUsers);

@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import SectionArt, { SectionArtName } from "./SectionArt";
 
 type HeroHeadingStat = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -13,26 +14,29 @@ type HeroHeadingStat = {
 type HeroHeadingProps = {
   title: string;
   subtitle: string;
+  artSection?: SectionArtName;
   ctaLabel?: string;
   ctaIcon?: keyof typeof Ionicons.glyphMap;
   onPressCta?: () => void;
   stats?: HeroHeadingStat[];
   gradientColors?: [string, string];
+  subtitleLines?: number;
 };
 
-const DEFAULT_GRADIENT: [string, string] = [COLORS.background, COLORS.card];
+const DEFAULT_GRADIENT: [string, string] = ["#08050B", "#120814"];
 
 const HeroHeading = ({
   title,
   subtitle,
+  artSection,
   ctaLabel,
   ctaIcon = "sparkles-outline",
   onPressCta,
   stats = [],
   gradientColors = DEFAULT_GRADIENT,
+  subtitleLines = 2,
 }: HeroHeadingProps) => {
-  const eyebrowLabel =
-    title === "Ananymous" ? "ANONYMOUS MENU" : "PRIVATE ACCESS";
+  const eyebrowLabel = title === "Ananymous" ? "ANON SPACE" : "PRIVATE ACCESS";
 
   return (
     <LinearGradient
@@ -59,8 +63,19 @@ const HeroHeading = ({
         ) : null}
       </View>
 
-      <Text style={styles.appName}>{title}</Text>
-      <Text style={styles.heroSubtitle}>{subtitle}</Text>
+      <View style={styles.heroContentRow}>
+        <View style={styles.heroCopyColumn}>
+          <Text style={styles.appName}>{title}</Text>
+          <Text style={styles.heroSubtitle} numberOfLines={subtitleLines}>
+            {subtitle}
+          </Text>
+        </View>
+        {artSection ? (
+          <View style={styles.heroArtWrap}>
+            <SectionArt section={artSection} size="md" />
+          </View>
+        ) : null}
+      </View>
 
       {!!stats.length && (
         <View style={styles.heroStatsRow}>
@@ -102,7 +117,7 @@ const styles = StyleSheet.create({
     inset: 1,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(24, 18, 18, 0.08)",
   },
   heroTopRow: {
     flexDirection: "row",
@@ -123,7 +138,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   eyebrowText: {
-    color: "rgba(212,212,216,0.72)",
+    color: "rgba(251,228,216,0.72)",
     ...TYPOGRAPHY.eyebrow,
     letterSpacing: 1.4,
   },
@@ -131,12 +146,26 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     ...TYPOGRAPHY.display,
     letterSpacing: 0.2,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  heroContentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  heroCopyColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   heroSubtitle: {
-    color: "rgba(212,212,216,0.74)",
+    color: "rgba(223,182,178,0.92)",
     ...TYPOGRAPHY.label,
-    maxWidth: "92%",
+    maxWidth: "100%",
+  },
+  heroArtWrap: {
+    width: 78,
+    alignItems: "flex-end",
   },
   heroStatsRow: {
     flexDirection: "row",
@@ -148,12 +177,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(251,228,216,0.06)",
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(223,182,178,0.10)",
   },
   heroStatText: {
     color: COLORS.text,
@@ -167,8 +196,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(223,182,178,0.16)",
+    backgroundColor: "rgba(251,228,216,0.07)",
     zIndex: 1,
   },
   heroBadgeText: {
@@ -182,7 +211,7 @@ const styles = StyleSheet.create({
     borderRadius: 64,
     top: -44,
     right: -20,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: "rgba(251,228,216,0.04)",
   },
   heroAccentTwo: {
     position: "absolute",
@@ -191,7 +220,7 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     bottom: -24,
     left: -14,
-    backgroundColor: "rgba(120,120,128,0.08)",
+    backgroundColor: "rgba(223,182,178,0.05)",
   },
 });
 

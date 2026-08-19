@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -11,12 +11,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animatable from "react-native-animatable";
 
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
+import SectionArt from "../components/SectionArt";
 import { useWallet } from "../contexts/WalletContext";
 import { FeedPost, getFeed } from "../services/api";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import { filterPostsForSettings } from "../utils/contentPreferences";
+import { getFriendlyErrorMessage } from "../utils/errorMessages";
 
 const DISCOVERY_CATEGORIES = [
   "all",
@@ -32,26 +36,31 @@ const DISCOVERY_MODES = [
     id: "trending",
     label: "Trending",
     helper: "Fast-moving posts with strong reactions.",
+    art: "discover" as const,
   },
   {
     id: "latest",
     label: "Fresh",
     helper: "Newest anonymous drops in the feed.",
+    art: "post" as const,
   },
   {
     id: "confession",
     label: "Confessions",
     helper: "Secrets, vulnerable posts, and raw honesty.",
+    art: "comments" as const,
   },
   {
     id: "qna",
     label: "Q&A",
     helper: "Question-led threads that pull answers quickly.",
+    art: "comments" as const,
   },
   {
     id: "nearby",
     label: "Nearby",
     helper: "Privacy-safe campus and city signals.",
+    art: "community" as const,
   },
 ] as const;
 
@@ -63,10 +72,13 @@ const formatDate = (value: string) =>
 
 const DiscoverScreen = () => {
   const navigation = useNavigation<any>();
-  const { isConnected } = useWallet();
+  const { settings } = useWallet();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [failedMediaIds, setFailedMediaIds] = useState<Record<number, true>>(
+    {},
+  );
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof DISCOVERY_CATEGORIES)[number]>("all");
   const [selectedMode, setSelectedMode] =
@@ -96,9 +108,7 @@ const DiscoverScreen = () => {
       setLoadError(null);
     } catch (error) {
       setLoadError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load discovery right now.",
+        getFriendlyErrorMessage(error, "Unable to load discovery right now."),
       );
     } finally {
       setRefreshing(false);
@@ -109,32 +119,83 @@ const DiscoverScreen = () => {
     loadPosts();
   }, [loadPosts]);
 
-  const featuredPost = posts[0] ?? null;
+  const hasRenderableMedia = useCallback(
+    (post: FeedPost | null) =>
+      Boolean(post?.mediaUrl && !failedMediaIds[post.id]),
+    [failedMediaIds],
+  );
+
+  const markMediaFailed = useCallback((postId: number) => {
+    setFailedMediaIds((current) => {
+      if (current[postId]) {
+        return current;
+      }
+
+      return { ...current, [postId]: true };
+    });
+  }, []);
+
+  const visiblePosts = useMemo(
+    () => filterPostsForSettings(posts, settings),
+    [posts, settings],
+  );
+  const featuredPost = visiblePosts[0] ?? null;
   const totalReplies = useMemo(
-    () => posts.reduce((sum, post) => sum + post.commentCount, 0),
-    [posts],
+    () => visiblePosts.reduce((sum, post) => sum + post.commentCount, 0),
+    [visiblePosts],
   );
   const totalTrend = useMemo(
-    () => posts.reduce((sum, post) => sum + post.trendingScore, 0),
-    [posts],
+    () => visiblePosts.reduce((sum, post) => sum + post.trendingScore, 0),
+    [visiblePosts],
   );
   const trendingHashtags = useMemo(
     () =>
       Array.from(
-        new Set(posts.flatMap((post) => post.hashtags || []).filter(Boolean)),
+        new Set(
+          visiblePosts.flatMap((post) => post.hashtags || []).filter(Boolean),
+        ),
       ).slice(0, 8),
-    [posts],
+    [visiblePosts],
   );
   const nearbyCount = useMemo(
-    () => posts.filter((post) => post.campusTag || post.cityTag).length,
-    [posts],
+    () => visiblePosts.filter((post) => post.campusTag || post.cityTag).length,
+    [visiblePosts],
   );
   const activeMode = DISCOVERY_MODES.find((mode) => mode.id === selectedMode);
 
   return (
     <ScreenSurface style={styles.surface} bleedTop>
+      <View style={styles.heroDock}>
+        <HeroHeading
+          title="Discover"
+          subtitle="Swipe lanes. Follow the strongest signals."
+          artSection="discover"
+          ctaLabel="Start a post"
+          ctaIcon="add-outline"
+          onPressCta={() => navigation.navigate("Post")}
+          stats={[
+            {
+              icon: "flame-outline",
+              label: `${featuredPost?.trendingScore ?? 0} top score`,
+              color: COLORS.primary,
+            },
+            {
+              icon: "chatbubble-ellipses-outline",
+              label: `${totalReplies} replies in view`,
+              color: COLORS.secondary,
+            },
+            {
+              icon: "location-outline",
+              label: `${nearbyCount} nearby tagged`,
+              color: COLORS.gray,
+            },
+          ]}
+          subtitleLines={2}
+        />
+      </View>
+
       <FlatList
-        data={posts}
+        data={visiblePosts}
         keyExtractor={(item) => `${item.id}`}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadPosts} />
@@ -143,44 +204,22 @@ const DiscoverScreen = () => {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <View>
-            <HeroHeading
-              title="Discover"
-              subtitle="Follow the strongest signals, surface the right mood, and move between trending, confessions, Q&A, and nearby threads."
-              ctaLabel={isConnected ? "Start a post" : "Unlock posting"}
-              ctaIcon={isConnected ? "add-outline" : "wallet-outline"}
-              onPressCta={() =>
-                navigation.navigate(isConnected ? "Post" : "Wallet")
-              }
-              stats={[
-                {
-                  icon: "flame-outline",
-                  label: `${featuredPost?.trendingScore ?? 0} top score`,
-                  color: COLORS.primary,
-                },
-                {
-                  icon: "chatbubble-ellipses-outline",
-                  label: `${totalReplies} replies in view`,
-                  color: COLORS.secondary,
-                },
-                {
-                  icon: "location-outline",
-                  label: `${nearbyCount} nearby tagged`,
-                  color: COLORS.gray,
-                },
-              ]}
-            />
-
             <View style={styles.summaryRow}>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryValue}>{posts.length}</Text>
+                <SectionArt section="discover" size="sm" animated={false} />
+                <Text style={styles.summaryValue}>{visiblePosts.length}</Text>
                 <Text style={styles.summaryLabel}>Posts surfaced</Text>
               </View>
               <View style={styles.summaryCard}>
+                <SectionArt section="comments" size="sm" animated={false} />
                 <Text style={styles.summaryValue}>{totalTrend}</Text>
                 <Text style={styles.summaryLabel}>Trend score</Text>
               </View>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryValue}>{trendingHashtags.length}</Text>
+                <SectionArt section="polls" size="sm" animated={false} />
+                <Text style={styles.summaryValue}>
+                  {trendingHashtags.length}
+                </Text>
                 <Text style={styles.summaryLabel}>Live hashtags</Text>
               </View>
             </View>
@@ -211,21 +250,34 @@ const DiscoverScreen = () => {
                 {DISCOVERY_MODES.map((mode) => {
                   const active = selectedMode === mode.id;
                   return (
-                    <TouchableOpacity
+                    <Animatable.View
                       key={mode.id}
-                      style={[styles.modeCard, active && styles.modeCardActive]}
-                      onPress={() => setSelectedMode(mode.id)}
+                      animation="fadeInUp"
+                      duration={360}
+                      useNativeDriver
                     >
-                      <Text
+                      <TouchableOpacity
                         style={[
-                          styles.modeTitle,
-                          active && styles.modeTitleActive,
+                          styles.modeCard,
+                          active && styles.modeCardActive,
                         ]}
+                        onPress={() => setSelectedMode(mode.id)}
                       >
-                        {mode.label}
-                      </Text>
-                      <Text style={styles.modeHelper}>{mode.helper}</Text>
-                    </TouchableOpacity>
+                        <SectionArt
+                          section={mode.art}
+                          size="sm"
+                          animated={active}
+                        />
+                        <Text
+                          style={[
+                            styles.modeTitle,
+                            active && styles.modeTitleActive,
+                          ]}
+                        >
+                          {mode.label}
+                        </Text>
+                      </TouchableOpacity>
+                    </Animatable.View>
                   );
                 })}
               </ScrollView>
@@ -330,13 +382,21 @@ const DiscoverScreen = () => {
                 <Text style={styles.spotlightBody} numberOfLines={4}>
                   {featuredPost.body}
                 </Text>
-                {featuredPost.mediaUrl ? (
+                {hasRenderableMedia(featuredPost) ? (
                   <Image
-                    source={{ uri: featuredPost.mediaUrl }}
+                    source={{ uri: featuredPost.mediaUrl ?? undefined }}
                     style={styles.spotlightImage}
                     contentFit="cover"
+                    onError={() => markMediaFailed(featuredPost.id)}
                   />
-                ) : null}
+                ) : (
+                  <View style={styles.spotlightFallbackCard}>
+                    <SectionArt
+                      section={activeMode?.art ?? "discover"}
+                      size="lg"
+                    />
+                  </View>
+                )}
                 <View style={styles.spotlightStats}>
                   <View style={styles.signalPill}>
                     <Ionicons
@@ -375,7 +435,9 @@ const DiscoverScreen = () => {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Discovery results</Text>
               <Text style={styles.sectionMeta}>
-                {selectedHashtag ? `Filtered by #${selectedHashtag}` : "Pull to refresh"}
+                {selectedHashtag
+                  ? `Filtered by #${selectedHashtag}`
+                  : "Pull to refresh"}
               </Text>
             </View>
           </View>
@@ -383,7 +445,11 @@ const DiscoverScreen = () => {
         ListEmptyComponent={
           refreshing ? null : (
             <View style={styles.emptyCard}>
-              <Ionicons name="compass-outline" size={22} color={COLORS.primary} />
+              <Ionicons
+                name="compass-outline"
+                size={22}
+                color={COLORS.primary}
+              />
               <Text style={styles.emptyTitle}>Nothing surfaced yet</Text>
               <Text style={styles.emptyText}>
                 Try a different lane, category, or hashtag to widen the search.
@@ -404,11 +470,15 @@ const DiscoverScreen = () => {
                 </View>
                 <View>
                   <Text style={styles.feedAuthor}>Anonymous signal</Text>
-                  <Text style={styles.feedDate}>{formatDate(item.createdAt)}</Text>
+                  <Text style={styles.feedDate}>
+                    {formatDate(item.createdAt)}
+                  </Text>
                 </View>
               </View>
               <View style={styles.rankPill}>
-                <Text style={styles.rankPillText}>{item.trendingScore} score</Text>
+                <Text style={styles.rankPillText}>
+                  {item.trendingScore} score
+                </Text>
               </View>
             </View>
 
@@ -421,7 +491,9 @@ const DiscoverScreen = () => {
               </View>
               {item.campusTag ? (
                 <View style={styles.feedBadge}>
-                  <Text style={styles.feedBadgeText}>campus: {item.campusTag}</Text>
+                  <Text style={styles.feedBadgeText}>
+                    campus: {item.campusTag}
+                  </Text>
                 </View>
               ) : null}
               {item.cityTag ? (
@@ -431,13 +503,18 @@ const DiscoverScreen = () => {
               ) : null}
             </View>
 
-            {item.mediaUrl ? (
+            {hasRenderableMedia(item) ? (
               <Image
-                source={{ uri: item.mediaUrl }}
+                source={{ uri: item.mediaUrl ?? undefined }}
                 style={styles.feedImage}
                 contentFit="cover"
+                onError={() => markMediaFailed(item.id)}
               />
-            ) : null}
+            ) : (
+              <View style={styles.feedArtCard}>
+                <SectionArt section={activeMode?.art ?? "discover"} size="md" />
+              </View>
+            )}
             <Text style={styles.feedBody} numberOfLines={3}>
               {item.body || "Image post"}
             </Text>
@@ -456,10 +533,14 @@ const DiscoverScreen = () => {
             )}
 
             <View style={styles.feedFooter}>
-              <Text style={styles.feedFooterText}>{item.commentCount} replies</Text>
+              <Text style={styles.feedFooterText}>
+                {item.commentCount} replies
+              </Text>
               <Text style={styles.feedFooterText}>{item.upVotes} boosts</Text>
               <Text style={styles.feedFooterText}>
-                {item.pollOptions.length ? `${item.pollOptions.length} poll options` : "text thread"}
+                {item.pollOptions?.length
+                  ? `${item.pollOptions.length} poll options`
+                  : "text thread"}
               </Text>
             </View>
           </View>
@@ -474,8 +555,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-  content: {
+  heroDock: {
+    paddingHorizontal: 16,
     paddingTop: 24,
+    marginBottom: 4,
+  },
+  content: {
+    paddingTop: 0,
     paddingBottom: 140,
   },
   summaryRow: {
@@ -485,12 +571,13 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#0E0E12",
     paddingVertical: 16,
     paddingHorizontal: 12,
+    gap: 10,
   },
   summaryValue: {
     color: COLORS.text,
@@ -502,10 +589,10 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
   },
   filterCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
+    backgroundColor: "#09090C",
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 18,
     marginBottom: 18,
   },
@@ -544,12 +631,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   modeCard: {
-    width: 176,
+    width: 116,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
     padding: 14,
+    gap: 10,
   },
   modeCardActive: {
     borderColor: `${COLORS.primary}45`,
@@ -558,14 +646,9 @@ const styles = StyleSheet.create({
   modeTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.label,
-    marginBottom: 4,
   },
   modeTitleActive: {
     color: COLORS.text,
-  },
-  modeHelper: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.meta,
   },
   categoryRow: {
     gap: 8,
@@ -576,8 +659,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
   },
   categoryChipActive: {
     borderColor: `${COLORS.secondary}45`,
@@ -600,9 +683,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: "#101015",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   hashtagChipActive: {
     borderColor: `${COLORS.primary}45`,
@@ -621,8 +704,8 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#09090C",
     padding: 14,
     marginBottom: 18,
   },
@@ -632,10 +715,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   spotlightCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 26,
+    backgroundColor: "#09090C",
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 18,
     marginBottom: 18,
   },
@@ -649,9 +732,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: "#101015",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   spotlightPillText: {
     color: COLORS.gray,
@@ -670,6 +753,17 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     backgroundColor: "rgba(255,255,255,0.04)",
   },
+  spotlightFallbackCard: {
+    width: "100%",
+    height: 220,
+    borderRadius: 18,
+    marginBottom: 14,
+    backgroundColor: "#101015",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   spotlightStats: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -683,8 +777,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
   },
   signalText: {
     color: COLORS.text,
@@ -693,10 +787,10 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#09090C",
     padding: 24,
     marginTop: 8,
   },
@@ -712,10 +806,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   feedCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 22,
+    backgroundColor: "#09090C",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 16,
     marginBottom: 12,
   },
@@ -773,8 +867,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#101015",
   },
   feedBadgeText: {
     color: COLORS.gray,
@@ -792,6 +886,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 14,
     backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  feedArtCard: {
+    width: "100%",
+    height: 152,
+    borderRadius: 18,
+    marginBottom: 14,
+    backgroundColor: "#101015",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   feedHashtagRow: {
     flexDirection: "row",
