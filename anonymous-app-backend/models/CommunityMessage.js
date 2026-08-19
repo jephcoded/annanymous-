@@ -11,7 +11,7 @@ exports.createMessage = async ({ communityId, userId, message }) => {
 
 exports.getMessages = async (communityId, limit = 50) => {
   const result = await db.query(
-    `SELECT m.*, u.wallet_address as sender FROM community_messages m
+    `SELECT m.*, u.display_name as sender FROM community_messages m
      LEFT JOIN users u ON m.user_id = u.id
      WHERE m.community_id = $1
      ORDER BY m.created_at DESC

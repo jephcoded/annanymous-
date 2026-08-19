@@ -403,7 +403,7 @@ const CreatePostScreen = () => {
             <Text style={styles.sectionLabel}>Poll options</Text>
             <View style={styles.pollCard}>
               {pollOptions.map((option: string, index: number) => (
-                <View key={`${index}-${option}`} style={styles.optionRow}>
+                <View key={index} style={styles.optionRow}>
                   <TextInput
                     style={[styles.input, styles.optionInput]}
                     placeholder={`Option ${index + 1}`}

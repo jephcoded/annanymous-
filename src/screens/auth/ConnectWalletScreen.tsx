@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
+import Animatable from "react-native-animatable";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import PressableScale from "../../components/PressableScale";
 import { useWallet } from "../../contexts/WalletContext";
 import { COLORS, TYPOGRAPHY } from "../../theme";
 
@@ -54,28 +56,11 @@ const ConnectWalletScreen = () => {
 
   const signupMeta = useMemo(
     () => [
-      {
-        title: "Choose your identity",
-        subtitle: "You can always change this later.",
-      },
-      {
-        title: "Secure your account",
-        subtitle:
-          "Your email keeps your account signed in, but your posts still stay anonymous.",
-      },
-      {
-        title: "Pick your interests",
-        subtitle: "Select topics you care about. We'll personalize your feed.",
-      },
-      {
-        title: "Enable location",
-        subtitle:
-          "Help us show posts and communities near you. You can skip this now.",
-      },
-      {
-        title: "Almost there!",
-        subtitle: "Review your details before creating your account.",
-      },
+      { title: "Choose your name", subtitle: "You can change it anytime." },
+      { title: "Secure your account", subtitle: "Posts stay anonymous either way." },
+      { title: "Pick your interests", subtitle: "We'll tailor your feed." },
+      { title: "Location", subtitle: "Optional — shows nearby posts." },
+      { title: "Almost there", subtitle: "Review, then create your account." },
     ],
     [],
   );
@@ -165,12 +150,12 @@ const ConnectWalletScreen = () => {
   };
 
   const primaryLabel = isBusy
-    ? "Initializing..."
+    ? "Please wait..."
     : isSignup
       ? isLastSignupStep
-        ? "Create Account"
+        ? "Create account"
         : "Continue"
-      : "Log In";
+      : "Log in";
 
   const canSubmit = isSignup ? canContinueSignup : canLogin;
 
@@ -187,60 +172,114 @@ const ConnectWalletScreen = () => {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.brandCard}>
+        <Animatable.View
+          animation="fadeInDown"
+          duration={480}
+          useNativeDriver
+          style={styles.brandCard}
+        >
           <View style={styles.brandMark}>
             <Ionicons
               name="shield-half-outline"
-              size={46}
-              color={COLORS.accent}
+              size={44}
+              color={COLORS.primary}
             />
           </View>
           <Text style={styles.brandTitle}>ANON</Text>
-          <Text style={styles.brandSubtitle}>
-            Speak freely. Stay anonymous.
-          </Text>
-        </View>
+          <Text style={styles.brandSubtitle}>Speak freely. Stay anonymous.</Text>
+        </Animatable.View>
 
         {view === "entry" ? (
-          <View style={styles.entryPanel}>
-            <Text style={styles.entryTitle}>Private by default.</Text>
+          <Animatable.View
+            animation="fadeInUp"
+            duration={480}
+            useNativeDriver
+            style={styles.entryPanel}
+          >
+            <Text style={styles.entryTitle}>Welcome.</Text>
             <Text style={styles.entrySubtitle}>
-              Create an account before onboarding so your feed, profile, and
-              settings are tied to a real session.
+              No personal info required. Just you, unfiltered.
             </Text>
 
-            <TouchableOpacity style={styles.primaryButton} onPress={openSignup}>
-              <Text style={styles.primaryButtonText}>Create Account</Text>
-            </TouchableOpacity>
+            <PressableScale style={styles.primaryButton} onPress={openSignup}>
+              <Text style={styles.primaryButtonText}>Create account</Text>
+            </PressableScale>
 
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={openLogin}
-            >
-              <Text style={styles.secondaryButtonText}>Log In</Text>
-            </TouchableOpacity>
+            <PressableScale style={styles.secondaryButton} onPress={openLogin}>
+              <Text style={styles.secondaryButtonText}>Log in</Text>
+            </PressableScale>
+
+            <View style={styles.trustRow}>
+              <View style={styles.trustItem}>
+                <Ionicons
+                  name="eye-off-outline"
+                  size={14}
+                  color={COLORS.gray}
+                />
+                <Text style={styles.trustText}>Anonymous</Text>
+              </View>
+              <View style={styles.trustDot} />
+              <View style={styles.trustItem}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={14}
+                  color={COLORS.gray}
+                />
+                <Text style={styles.trustText}>Private</Text>
+              </View>
+              <View style={styles.trustDot} />
+              <View style={styles.trustItem}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={14}
+                  color={COLORS.gray}
+                />
+                <Text style={styles.trustText}>Secure</Text>
+              </View>
+            </View>
 
             <Text style={styles.termsText}>
-              By continuing, you agree to our Terms of Service and Privacy
-              Policy.
+              By continuing, you agree to our Terms and Privacy Policy.
             </Text>
-          </View>
+          </Animatable.View>
         ) : (
-          <View style={styles.panel}>
+          <Animatable.View
+            animation="fadeInUp"
+            duration={420}
+            useNativeDriver
+            style={styles.panel}
+          >
             <View style={styles.topBar}>
               <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                 <Ionicons name="chevron-back" size={18} color={COLORS.text} />
               </TouchableOpacity>
 
-              <Text style={styles.topBarLabel}>
-                {isSignup ? "CREATE ACCOUNT FLOW" : "WELCOME BACK"}
-              </Text>
+              {isSignup ? (
+                <View style={styles.paginationRow}>
+                  {Array.from({ length: SIGNUP_STEP_COUNT }).map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.dot,
+                        index === signupStep && styles.dotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.topBarLabel}>WELCOME BACK</Text>
+              )}
 
               <View style={styles.backButtonPlaceholder} />
             </View>
 
             {isSignup ? (
-              <>
+              <Animatable.View
+                key={signupStep}
+                animation="fadeIn"
+                duration={260}
+                useNativeDriver
+              >
                 <Text style={styles.sectionTitle}>
                   {signupMeta[signupStep].title}
                 </Text>
@@ -253,8 +292,8 @@ const ConnectWalletScreen = () => {
                     <View style={styles.identityAvatar}>
                       <Ionicons
                         name="shield-half-outline"
-                        size={34}
-                        color={COLORS.accent}
+                        size={32}
+                        color={COLORS.primary}
                       />
                     </View>
                     <View style={styles.inputCard}>
@@ -274,7 +313,7 @@ const ConnectWalletScreen = () => {
                 {signupStep === 1 ? (
                   <View style={styles.formStack}>
                     <View style={styles.inputCard}>
-                      <Text style={styles.inputLabel}>Email address</Text>
+                      <Text style={styles.inputLabel}>Email</Text>
                       <TextInput
                         value={email}
                         onChangeText={setEmail}
@@ -287,7 +326,7 @@ const ConnectWalletScreen = () => {
                       />
                     </View>
                     <View style={styles.inputCard}>
-                      <Text style={styles.inputLabel}>Create a password</Text>
+                      <Text style={styles.inputLabel}>Password</Text>
                       <TextInput
                         value={password}
                         onChangeText={setPassword}
@@ -326,7 +365,7 @@ const ConnectWalletScreen = () => {
                             <Ionicons
                               name="checkmark-circle"
                               size={14}
-                              color={COLORS.accent}
+                              color={COLORS.primary}
                             />
                           ) : null}
                         </TouchableOpacity>
@@ -340,18 +379,15 @@ const ConnectWalletScreen = () => {
                     {[
                       {
                         key: "current" as const,
-                        title: "Use current location",
-                        subtitle: "Show nearby posts and communities.",
+                        title: "Current location",
                       },
                       {
                         key: "manual" as const,
-                        title: "Select manually",
-                        subtitle: "Enter your city or campus yourself.",
+                        title: "Enter manually",
                       },
                       {
                         key: "skip" as const,
                         title: "Skip for now",
-                        subtitle: "You can change this later in settings.",
                       },
                     ].map((option) => {
                       const active = locationMode === option.key;
@@ -364,14 +400,9 @@ const ConnectWalletScreen = () => {
                           ]}
                           onPress={() => setLocationMode(option.key)}
                         >
-                          <View style={styles.locationChoiceCopy}>
-                            <Text style={styles.locationChoiceTitle}>
-                              {option.title}
-                            </Text>
-                            <Text style={styles.locationChoiceSubtitle}>
-                              {option.subtitle}
-                            </Text>
-                          </View>
+                          <Text style={styles.locationChoiceTitle}>
+                            {option.title}
+                          </Text>
                           <View
                             style={[
                               styles.choiceRadio,
@@ -401,7 +432,7 @@ const ConnectWalletScreen = () => {
                 {signupStep === 4 ? (
                   <View style={styles.reviewCard}>
                     <View style={styles.reviewRow}>
-                      <Text style={styles.reviewLabel}>Display Name</Text>
+                      <Text style={styles.reviewLabel}>Name</Text>
                       <Text style={styles.reviewValue}>{displayName}</Text>
                     </View>
                     <View style={styles.reviewRow}>
@@ -422,26 +453,10 @@ const ConnectWalletScreen = () => {
                     </View>
                   </View>
                 ) : null}
-
-                <View style={styles.paginationRow}>
-                  {Array.from({ length: SIGNUP_STEP_COUNT }).map((_, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.dot,
-                        index === signupStep && styles.dotActive,
-                      ]}
-                    />
-                  ))}
-                </View>
-              </>
+              </Animatable.View>
             ) : (
-              <>
-                <Text style={styles.sectionTitle}>Log in to ANON</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Your session stays on this device even after you close the
-                  app.
-                </Text>
+              <Animatable.View animation="fadeIn" duration={260} useNativeDriver>
+                <Text style={styles.sectionTitle}>Log in</Text>
                 <View style={styles.formStack}>
                   <View style={styles.inputCard}>
                     <Text style={styles.inputLabel}>Email</Text>
@@ -469,15 +484,15 @@ const ConnectWalletScreen = () => {
                     />
                   </View>
                 </View>
-              </>
+              </Animatable.View>
             )}
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <TouchableOpacity
+            <PressableScale
               style={[
                 styles.primaryButton,
-                !canSubmit && styles.primaryButtonDisabled,
+                (!canSubmit || isBusy) && styles.primaryButtonDisabled,
               ]}
               onPress={() => void handlePrimaryAction()}
               disabled={!canSubmit || isBusy}
@@ -486,36 +501,9 @@ const ConnectWalletScreen = () => {
                 <ActivityIndicator color={COLORS.text} style={styles.loader} />
               ) : null}
               <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
-            </TouchableOpacity>
-          </View>
+            </PressableScale>
+          </Animatable.View>
         )}
-
-        <View style={styles.footerStrip}>
-          <View style={styles.footerItem}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={15}
-              color={COLORS.primary}
-            />
-            <Text style={styles.footerText}>Anonymous by default</Text>
-          </View>
-          <View style={styles.footerItem}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={15}
-              color={COLORS.primary}
-            />
-            <Text style={styles.footerText}>Your data is safe</Text>
-          </View>
-          <View style={styles.footerItem}>
-            <Ionicons
-              name="sparkles-outline"
-              size={15}
-              color={COLORS.primary}
-            />
-            <Text style={styles.footerText}>Speak freely</Text>
-          </View>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -547,70 +535,93 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 24,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    gap: 20,
   },
   brandCard: {
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   brandMark: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0A0A0E",
+    backgroundColor: "rgba(139,61,255,0.1)",
     borderWidth: 1,
-    borderColor: "rgba(139,61,255,0.28)",
+    borderColor: "rgba(139,61,255,0.24)",
   },
   brandTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.display,
-    letterSpacing: 2,
+    letterSpacing: 3,
   },
   brandSubtitle: {
     color: COLORS.gray,
     ...TYPOGRAPHY.meta,
   },
   entryPanel: {
-    borderRadius: 28,
+    borderRadius: 32,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "#09090C",
-    padding: 18,
+    padding: 24,
   },
   entryTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.heading,
     textAlign: "center",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   entrySubtitle: {
     color: COLORS.gray,
     ...TYPOGRAPHY.body,
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 18,
+  },
+  trustItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  trustDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  trustText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
   },
   termsText: {
     color: COLORS.gray,
     ...TYPOGRAPHY.meta,
     textAlign: "center",
-    marginTop: 14,
+    marginTop: 16,
+    opacity: 0.7,
   },
   panel: {
-    borderRadius: 28,
+    borderRadius: 32,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "#09090C",
-    padding: 18,
+    padding: 24,
   },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 18,
+    marginBottom: 22,
     gap: 10,
   },
   topBarLabel: {
@@ -618,55 +629,55 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.eyebrow,
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.04)",
   },
   backButtonPlaceholder: {
-    width: 34,
+    width: 36,
   },
   sectionTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.heading,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   sectionSubtitle: {
     color: COLORS.gray,
     ...TYPOGRAPHY.body,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   identityCard: {
     alignItems: "center",
-    gap: 16,
-    marginBottom: 10,
+    gap: 18,
+    marginBottom: 8,
   },
   identityAvatar: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(139,61,255,0.14)",
+    backgroundColor: "rgba(139,61,255,0.12)",
     borderWidth: 1,
     borderColor: "rgba(139,61,255,0.24)",
   },
   formStack: {
     gap: 12,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   inputCard: {
     borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     backgroundColor: "#111117",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
   inputLabel: {
-    color: "rgba(247,242,255,0.52)",
+    color: "rgba(247,242,255,0.5)",
     ...TYPOGRAPHY.meta,
     marginBottom: 8,
   },
@@ -679,22 +690,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   interestChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     backgroundColor: "#111117",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
   interestChipActive: {
-    backgroundColor: "rgba(139,61,255,0.18)",
-    borderColor: "rgba(139,61,255,0.28)",
+    backgroundColor: "rgba(139,61,255,0.16)",
+    borderColor: "rgba(139,61,255,0.32)",
   },
   interestChipText: {
     color: COLORS.gray,
@@ -707,28 +718,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
     borderRadius: 18,
-    padding: 14,
+    padding: 16,
     backgroundColor: "#111117",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
   },
   locationChoiceActive: {
-    borderColor: "rgba(139,61,255,0.34)",
+    borderColor: "rgba(139,61,255,0.36)",
     backgroundColor: "rgba(139,61,255,0.12)",
-  },
-  locationChoiceCopy: {
-    flex: 1,
   },
   locationChoiceTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.label,
-    marginBottom: 4,
-  },
-  locationChoiceSubtitle: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.meta,
   },
   choiceRadio: {
     width: 18,
@@ -746,16 +748,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#111117",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
+    marginBottom: 8,
   },
   reviewRow: {
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
   },
   reviewRowLast: {
-    paddingTop: 11,
+    paddingTop: 12,
     paddingBottom: 4,
   },
   reviewLabel: {
@@ -771,7 +773,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    marginBottom: 14,
   },
   dot: {
     width: 7,
@@ -787,23 +788,26 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#F87171",
     ...TYPOGRAPHY.label,
-    marginBottom: 14,
+    marginBottom: 16,
     textAlign: "center",
   },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: COLORS.primary,
-    paddingVertical: 15,
+    paddingVertical: 17,
+    marginTop: 6,
     shadowColor: COLORS.primary,
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   primaryButtonDisabled: {
-    opacity: 0.48,
+    opacity: 0.42,
+    shadowOpacity: 0,
   },
   primaryButtonText: {
     color: COLORS.text,
@@ -812,11 +816,11 @@ const styles = StyleSheet.create({
   secondaryButton: {
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 16,
+    borderRadius: 18,
     backgroundColor: "#111117",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    paddingVertical: 15,
+    borderColor: "rgba(255,255,255,0.07)",
+    paddingVertical: 17,
     marginTop: 12,
   },
   secondaryButtonText: {
@@ -825,23 +829,6 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginRight: 8,
-  },
-  footerStrip: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    backgroundColor: "#09090C",
-    padding: 14,
-    gap: 10,
-  },
-  footerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  footerText: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.meta,
   },
 });
 

@@ -1,10 +1,7 @@
-import { Platform } from "react-native";
-
-const FONT_FAMILY = Platform.select({
-  ios: "System",
-  android: "sans-serif",
-  default: "sans-serif",
-});
+const FONT_MEDIUM = "PlusJakartaSans_500Medium";
+const FONT_SEMIBOLD = "PlusJakartaSans_600SemiBold";
+const FONT_BOLD = "PlusJakartaSans_700Bold";
+const FONT_EXTRABOLD = "PlusJakartaSans_800ExtraBold";
 
 export type AppThemeName = "dark" | "midnight" | "obsidian";
 
@@ -94,64 +91,58 @@ export const COLORS = {
 
 export const TYPOGRAPHY = {
   display: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: "900" as const,
-    fontFamily: FONT_FAMILY,
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -0.6,
+    fontFamily: FONT_EXTRABOLD,
   },
   heading: {
     fontSize: 26,
     lineHeight: 32,
-    fontWeight: "800" as const,
-    fontFamily: FONT_FAMILY,
+    letterSpacing: -0.4,
+    fontFamily: FONT_EXTRABOLD,
   },
   title: {
     fontSize: 21,
     lineHeight: 28,
-    fontWeight: "700" as const,
-    fontFamily: FONT_FAMILY,
+    letterSpacing: -0.2,
+    fontFamily: FONT_BOLD,
   },
   section: {
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: "700" as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BOLD,
   },
   body: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: "500" as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_MEDIUM,
   },
   label: {
     fontSize: 14,
     lineHeight: 19,
-    fontWeight: "700" as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BOLD,
   },
   meta: {
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: "600" as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_SEMIBOLD,
   },
   button: {
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: "800" as const,
-    fontFamily: FONT_FAMILY,
+    letterSpacing: 0.1,
+    fontFamily: FONT_EXTRABOLD,
   },
   tab: {
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: "700" as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BOLD,
   },
   eyebrow: {
     fontSize: 10,
     lineHeight: 12,
-    fontWeight: "800" as const,
     letterSpacing: 1.5,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_EXTRABOLD,
   },
 };

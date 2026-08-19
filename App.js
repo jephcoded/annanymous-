@@ -2,9 +2,17 @@ import "node-libs-react-native/globals";
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
 
+import {
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+    useFonts,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -31,6 +39,8 @@ LogBox.ignoreLogs([
   "MetaMask: 'ethereum._metamask' exposes",
   "`new NativeEventEmitter()` was called with a non-null",
 ]);
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const isExpoGoPreview =
   Constants.appOwnership === "expo" ||
@@ -193,12 +203,28 @@ function AppShell({ walletUiVisible = false, adminMode = false }) {
 
 export default function App() {
   const [walletUiVisible, setWalletUiVisible] = useState(false);
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded]);
 
   const prepareWalletUi = async () => {
     ensureAppKit();
     setWalletUiVisible(true);
     await new Promise((resolve) => setTimeout(resolve, 250));
   };
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   const content = (
     <AppShell walletUiVisible={walletUiVisible} adminMode={isAdminWebRoute} />
