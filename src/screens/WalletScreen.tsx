@@ -25,6 +25,7 @@ import {
     NotificationItem,
     SessionAccess,
     WalletProfile,
+    changePassword,
     deletePost,
     getFeed,
     getMe,
@@ -58,7 +59,8 @@ type ProfileTab =
   | "content"
   | "support"
   | "myPosts"
-  | "saved";
+  | "saved"
+  | "password";
 
 const SUPPORT_EMAIL = "support@ananymous.app";
 const THEME_OPTIONS = [
@@ -155,6 +157,10 @@ const WalletScreen = () => {
   );
   const [savedPosts, setSavedPosts] = useState<FeedPost[]>([]);
   const [savedPostsLoading, setSavedPostsLoading] = useState(false);
+  const [currentPasswordDraft, setCurrentPasswordDraft] = useState("");
+  const [newPasswordDraft, setNewPasswordDraft] = useState("");
+  const [confirmPasswordDraft, setConfirmPasswordDraft] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const isCompact = width < 390;
   const isSubpage = activeTab !== "overview";
@@ -246,6 +252,10 @@ const WalletScreen = () => {
         saved: {
           title: "Saved",
           subtitle: "Posts you've bookmarked to revisit.",
+        },
+        password: {
+          title: "Change Password",
+          subtitle: "Keep your account secure.",
         },
       })[activeTab],
     [activeTab],
@@ -370,6 +380,42 @@ const WalletScreen = () => {
       return next;
     });
   }, []);
+
+  const handleChangePassword = useCallback(async () => {
+    if (!token) {
+      setStatusMessage("Your session expired. Log in again to continue.");
+      return;
+    }
+
+    if (!currentPasswordDraft || newPasswordDraft.length < 6) {
+      setStatusMessage("Enter your current password and a new one (6+ characters).");
+      return;
+    }
+
+    if (newPasswordDraft !== confirmPasswordDraft) {
+      setStatusMessage("New password and confirmation don't match.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword(token, {
+        currentPassword: currentPasswordDraft,
+        newPassword: newPasswordDraft,
+      });
+      setCurrentPasswordDraft("");
+      setNewPasswordDraft("");
+      setConfirmPasswordDraft("");
+      setStatusMessage("Password updated.");
+      setActiveTab("settings");
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to change password."),
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  }, [confirmPasswordDraft, currentPasswordDraft, newPasswordDraft, token]);
 
   const handleDeleteMyPost = useCallback(
     (post: FeedPost) => {
@@ -946,6 +992,17 @@ const WalletScreen = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.settingsRow}
+                onPress={() => setActiveTab("password")}
+              >
+                <Text style={styles.settingsRowText}>Change Password</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.gray}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
                 onPress={() => setActiveTab("privacy")}
               >
                 <Text style={styles.settingsRowText}>Privacy & Safety</Text>
@@ -1462,6 +1519,56 @@ const WalletScreen = () => {
                 </Text>
               </View>
             )}
+          </View>
+        ) : null}
+
+        {activeTab === "password" ? (
+          <View style={styles.sectionCard}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Current password</Text>
+              <TextInput
+                value={currentPasswordDraft}
+                onChangeText={setCurrentPasswordDraft}
+                placeholder="Current password"
+                placeholderTextColor={COLORS.gray}
+                secureTextEntry
+                style={styles.profileInput}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>New password</Text>
+              <TextInput
+                value={newPasswordDraft}
+                onChangeText={setNewPasswordDraft}
+                placeholder="At least 6 characters"
+                placeholderTextColor={COLORS.gray}
+                secureTextEntry
+                style={styles.profileInput}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Confirm new password</Text>
+              <TextInput
+                value={confirmPasswordDraft}
+                onChangeText={setConfirmPasswordDraft}
+                placeholder="Re-enter new password"
+                placeholderTextColor={COLORS.gray}
+                secureTextEntry
+                style={styles.profileInput}
+              />
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.primaryCta,
+                changingPassword && styles.primaryCtaDisabled,
+              ]}
+              onPress={() => void handleChangePassword()}
+              disabled={changingPassword}
+            >
+              <Text style={styles.primaryCtaText}>
+                {changingPassword ? "Updating..." : "Update password"}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : null}
       </ScrollView>

@@ -660,6 +660,16 @@ export const updateProfile = async (
     body: profile,
   });
 
+export const changePassword = async (
+  token: string,
+  payload: { currentPassword: string; newPassword: string },
+) =>
+  request<{ message: string }>("/auth/password", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+
 export const getSettings = async (token: string) =>
   request<{ data: UserSettings }>("/auth/settings", { token });
 

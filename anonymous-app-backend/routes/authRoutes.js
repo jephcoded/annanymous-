@@ -9,6 +9,12 @@ router.post("/challenge", authLimiter, authController.challenge);
 router.post("/verify", authLimiter, authController.verify);
 router.get("/me", authMiddleware, authController.me);
 router.patch("/profile", authMiddleware, authController.updateProfile);
+router.post(
+  "/password",
+  authMiddleware,
+  authLimiter,
+  authController.changePassword,
+);
 router.get("/settings", authMiddleware, authController.getSettings);
 router.patch("/settings", authMiddleware, authController.updateSettings);
 router.post(
