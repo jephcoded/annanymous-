@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -443,7 +444,12 @@ const DiscoverScreen = () => {
           </View>
         }
         ListEmptyComponent={
-          refreshing ? null : (
+          refreshing ? (
+            <View style={styles.emptyCard}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.emptyTitle}>Loading discover feed...</Text>
+            </View>
+          ) : (
             <View style={styles.emptyCard}>
               <Ionicons
                 name="compass-outline"

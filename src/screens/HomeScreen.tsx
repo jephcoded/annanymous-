@@ -9,6 +9,7 @@ import React, {
     useState,
 } from "react";
 import {
+    ActivityIndicator,
     Alert,
     FlatList,
     KeyboardAvoidingView,
@@ -621,7 +622,12 @@ const HomeScreen = () => {
           { paddingTop: fixedHeaderHeight },
         ]}
         ListEmptyComponent={
-          refreshing ? null : (
+          refreshing ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="small" color={HOME_COLORS.purple} />
+              <Text style={styles.emptyTitle}>Loading feed...</Text>
+            </View>
+          ) : (
             <View style={styles.emptyState}>
               <Ionicons
                 name="radio-outline"
