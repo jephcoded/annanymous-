@@ -197,6 +197,37 @@ exports.me = async (req, res, next) => {
   }
 };
 
+exports.changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        error: {
+          code: "PASSWORD_FIELDS_REQUIRED",
+          message: "currentPassword and newPassword are required",
+          status: 400,
+        },
+      });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        error: {
+          code: "PASSWORD_TOO_SHORT",
+          message: "New password must be at least 6 characters",
+          status: 400,
+        },
+      });
+    }
+
+    await User.changePassword(req.user.id, { currentPassword, newPassword });
+    res.json({ message: "Password updated." });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getSettings = async (req, res, next) => {
   try {
     const settings = await User.getSettings(req.user.id);

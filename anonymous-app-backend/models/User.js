@@ -105,6 +105,34 @@ exports.authenticatePasswordUser = async ({ email, password }) => {
   return user;
 };
 
+exports.changePassword = async (userId, { currentPassword, newPassword }) => {
+  const result = await db.query(
+    "SELECT id, auth_type, password_hash FROM users WHERE id = $1 LIMIT 1",
+    [userId],
+  );
+  const user = result.rows[0];
+
+  if (!user || user.auth_type !== "password") {
+    const error = new Error("Password sign-in is not enabled for this account");
+    error.status = 400;
+    error.code = "PASSWORD_AUTH_REQUIRED";
+    throw error;
+  }
+
+  if (!verifyPasswordHash(currentPassword, user.password_hash)) {
+    const error = new Error("Current password is incorrect");
+    error.status = 401;
+    error.code = "PASSWORD_INCORRECT";
+    throw error;
+  }
+
+  const nextHash = hashPassword(newPassword);
+  await db.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+    nextHash,
+    userId,
+  ]);
+};
+
 exports.getAccessContext = async (userId) => {
   const result = await db.query(
     `SELECT
