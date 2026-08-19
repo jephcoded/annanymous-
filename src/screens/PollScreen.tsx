@@ -9,17 +9,21 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import Animatable from "react-native-animatable";
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
+import SectionArt from "../components/SectionArt";
 import { useWallet } from "../contexts/WalletContext";
 import { FeedPost, getFeed, voteOnPoll } from "../services/api";
 import { buildActionRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
+import { filterPostsForSettings } from "../utils/contentPreferences";
+import { getFriendlyErrorMessage } from "../utils/errorMessages";
 
 const COLOR_STOPS = [COLORS.primary, COLORS.secondary, "#6B7280", "#52525B"];
 
 const getPollInsight = (poll: FeedPost | null) => {
-  if (!poll || !poll.pollOptions.length) {
+  if (!poll || !poll.pollOptions?.length) {
     return {
       leadLabel: "No live poll",
       turnoutLabel: "0 votes",
@@ -50,33 +54,37 @@ const getPollInsight = (poll: FeedPost | null) => {
 
 const PollScreen = () => {
   const navigation = useNavigation<any>();
-  const { token, isConnected } = useWallet();
+  const { token, settings } = useWallet();
   const [polls, setPolls] = useState<FeedPost[]>([]);
   const [selectedPollId, setSelectedPollId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const selectedPoll = useMemo(
-    () => polls.find((poll) => poll.id === selectedPollId) || polls[0] || null,
-    [polls, selectedPollId],
+  const visiblePolls = useMemo(
+    () => filterPostsForSettings(polls, settings),
+    [polls, settings],
   );
+  const selectedPoll = useMemo(
+    () =>
+      visiblePolls.find((poll: FeedPost) => poll.id === selectedPollId) ||
+      visiblePolls[0] ||
+      null,
+    [selectedPollId, visiblePolls],
+  );
+  const selectedPollOptions = selectedPoll?.pollOptions ?? [];
 
   const loadPolls = useCallback(async () => {
     setRefreshing(true);
     try {
       const response = await getFeed({ limit: 10, pollsOnly: true });
       setPolls(response.data);
-      setSelectedPollId((current) => current ?? response.data[0]?.id ?? null);
-      setStatusMessage(
-        response.data.length
-          ? null
-          : "Create a poll from the Post tab to see it here.",
+      setSelectedPollId(
+        (current: number | null) => current ?? response.data[0]?.id ?? null,
       );
+      setStatusMessage(null);
     } catch (error) {
       console.error("Poll fetch failed", error);
-      setStatusMessage(
-        error instanceof Error ? error.message : "Unable to load polls.",
-      );
+      setStatusMessage(getFriendlyErrorMessage(error, "Unable to load polls."));
     } finally {
       setRefreshing(false);
     }
@@ -86,13 +94,28 @@ const PollScreen = () => {
     loadPolls();
   }, [loadPolls]);
 
+  useEffect(() => {
+    if (visiblePolls.length) {
+      setStatusMessage(null);
+      setSelectedPollId((current) => current ?? visiblePolls[0]?.id ?? null);
+      return;
+    }
+
+    setStatusMessage(
+      polls.length
+        ? "Your content preferences are hiding the current polls."
+        : "Create a poll from the Post tab to see it here.",
+    );
+  }, [polls.length, visiblePolls]);
+
   const totalVotes = useMemo(
     () =>
-      selectedPoll?.pollOptions.reduce(
-        (sum, option) => sum + Number(option.votes || 0),
+      selectedPollOptions.reduce(
+        (sum: number, option: FeedPost["pollOptions"][number]) =>
+          sum + Number(option.votes || 0),
         0,
       ) || 0,
-    [selectedPoll],
+    [selectedPollOptions],
   );
   const pollInsight = useMemo(
     () => getPollInsight(selectedPoll),
@@ -102,7 +125,7 @@ const PollScreen = () => {
   const handleVote = useCallback(
     async (optionId: number) => {
       if (!selectedPoll || !token) {
-        setStatusMessage("Connect your wallet before voting in polls.");
+        setStatusMessage("Your session expired. Log in again to continue.");
         return;
       }
 
@@ -111,9 +134,7 @@ const PollScreen = () => {
         await loadPolls();
       } catch (error) {
         setStatusMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to submit poll vote.",
+          getFriendlyErrorMessage(error, "Unable to submit poll vote."),
         );
       }
     },
@@ -123,12 +144,12 @@ const PollScreen = () => {
   const heroStats = [
     {
       icon: "stats-chart-outline" as const,
-      label: `${polls.length} live polls`,
+      label: `${visiblePolls.length} live polls`,
       color: COLORS.gray,
     },
     {
       icon: "list-outline" as const,
-      label: `${selectedPoll?.pollOptions.length || 0} options`,
+      label: `${selectedPollOptions.length} options`,
       color: COLORS.secondary,
     },
     {
@@ -151,24 +172,27 @@ const PollScreen = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        <HeroHeading
-          title="Polls"
-          subtitle={
-            selectedPoll?.body ||
-            "Vote in live polls or start a new one from the post flow."
-          }
-          ctaLabel="Refresh"
-          ctaIcon="refresh"
-          onPressCta={loadPolls}
-          stats={heroStats}
-        />
+        <View style={styles.heroDock}>
+          <HeroHeading
+            title="Polls"
+            subtitle={
+              selectedPoll?.body ||
+              "Vote fast or launch a new poll from the composer."
+            }
+            artSection="polls"
+            ctaLabel="Refresh"
+            ctaIcon="refresh"
+            onPressCta={loadPolls}
+            stats={heroStats}
+            subtitleLines={2}
+          />
+        </View>
 
         <View style={styles.toolbarCard}>
+          <SectionArt section="polls" size="md" />
           <View style={styles.toolbarCopy}>
             <Text style={styles.toolbarTitle}>Poll board</Text>
-            <Text style={styles.toolbarText}>
-              Browse live polls here, then jump straight into creating a new one.
-            </Text>
+            <Text style={styles.toolbarText}>Live votes, quick reads.</Text>
           </View>
           <TouchableOpacity
             style={styles.createPollBtn}
@@ -192,14 +216,17 @@ const PollScreen = () => {
 
         <View style={styles.insightCard}>
           <View style={styles.insightColumn}>
+            <SectionArt section="discover" size="sm" animated={false} />
             <Text style={styles.insightLabel}>Lead</Text>
             <Text style={styles.insightValue}>{pollInsight.leadLabel}</Text>
           </View>
           <View style={styles.insightColumn}>
+            <SectionArt section="comments" size="sm" animated={false} />
             <Text style={styles.insightLabel}>Turnout</Text>
             <Text style={styles.insightValue}>{pollInsight.turnoutLabel}</Text>
           </View>
           <View style={styles.insightColumn}>
+            <SectionArt section="polls" size="sm" animated={false} />
             <Text style={styles.insightLabel}>Race</Text>
             <Text style={styles.insightValue}>
               {pollInsight.competitivenessLabel}
@@ -212,24 +239,31 @@ const PollScreen = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pollSelector}
         >
-          {polls.map((poll) => {
+          {visiblePolls.map((poll: FeedPost) => {
             const active = poll.id === selectedPoll?.id;
             return (
-              <TouchableOpacity
+              <Animatable.View
                 key={poll.id}
-                style={[styles.pollChip, active && styles.pollChipActive]}
-                onPress={() => setSelectedPollId(poll.id)}
+                animation="fadeInUp"
+                duration={320}
+                useNativeDriver
               >
-                <Text
-                  style={[
-                    styles.pollChipText,
-                    active && styles.pollChipTextActive,
-                  ]}
-                  numberOfLines={2}
+                <TouchableOpacity
+                  style={[styles.pollChip, active && styles.pollChipActive]}
+                  onPress={() => setSelectedPollId(poll.id)}
                 >
-                  {poll.body}
-                </Text>
-              </TouchableOpacity>
+                  <SectionArt section="polls" size="sm" animated={active} />
+                  <Text
+                    style={[
+                      styles.pollChipText,
+                      active && styles.pollChipTextActive,
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {poll.body}
+                  </Text>
+                </TouchableOpacity>
+              </Animatable.View>
             );
           })}
         </ScrollView>
@@ -240,62 +274,66 @@ const PollScreen = () => {
               <Text style={styles.voteHint}>
                 Vote anonymously to reveal where the room is leaning.
               </Text>
-              {selectedPoll.pollOptions.map((option, index) => {
-                const count = Number(option.votes || 0);
-                const percent = totalVotes
-                  ? Math.round((count / totalVotes) * 100)
-                  : 0;
-                const color = COLOR_STOPS[index % COLOR_STOPS.length];
-                return (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[styles.optionRow, { borderColor: color }]}
-                    onPress={() => handleVote(option.id)}
-                    disabled={!isConnected}
-                  >
-                    <View style={styles.optionLabel}>
-                      <Ionicons
-                        name="checkbox-outline"
-                        size={20}
-                        color={color}
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={styles.optionText}>{option.label}</Text>
-                    </View>
-                    <Text style={[styles.optionText, { color }]}>
-                      {percent}%
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {selectedPollOptions.map(
+                (option: FeedPost["pollOptions"][number], index: number) => {
+                  const count = Number(option.votes || 0);
+                  const percent = totalVotes
+                    ? Math.round((count / totalVotes) * 100)
+                    : 0;
+                  const color = COLOR_STOPS[index % COLOR_STOPS.length];
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.optionRow, { borderColor: color }]}
+                      onPress={() => handleVote(option.id)}
+                      disabled={!token}
+                    >
+                      <View style={styles.optionLabel}>
+                        <Ionicons
+                          name="checkbox-outline"
+                          size={20}
+                          color={color}
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={styles.optionText}>{option.label}</Text>
+                      </View>
+                      <Text style={[styles.optionText, { color }]}>
+                        {percent}%
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                },
+              )}
             </View>
 
             <View style={styles.resultsCard}>
-              {selectedPoll.pollOptions.map((option, index) => {
-                const count = Number(option.votes || 0);
-                const percent = totalVotes
-                  ? Math.round((count / totalVotes) * 100)
-                  : 0;
-                const color = COLOR_STOPS[index % COLOR_STOPS.length];
-                return (
-                  <View key={option.id} style={styles.resultRow}>
-                    <View style={styles.resultLabel}>
-                      <Text style={styles.resultText}>{option.label}</Text>
-                      <Text style={[styles.resultText, { color }]}>
-                        {count} vote{count === 1 ? "" : "s"}
-                      </Text>
+              {selectedPollOptions.map(
+                (option: FeedPost["pollOptions"][number], index: number) => {
+                  const count = Number(option.votes || 0);
+                  const percent = totalVotes
+                    ? Math.round((count / totalVotes) * 100)
+                    : 0;
+                  const color = COLOR_STOPS[index % COLOR_STOPS.length];
+                  return (
+                    <View key={option.id} style={styles.resultRow}>
+                      <View style={styles.resultLabel}>
+                        <Text style={styles.resultText}>{option.label}</Text>
+                        <Text style={[styles.resultText, { color }]}>
+                          {count} vote{count === 1 ? "" : "s"}
+                        </Text>
+                      </View>
+                      <View style={styles.progressTrack}>
+                        <View
+                          style={[
+                            styles.progressFill,
+                            { width: `${percent}%`, backgroundColor: color },
+                          ]}
+                        />
+                      </View>
                     </View>
-                    <View style={styles.progressTrack}>
-                      <View
-                        style={[
-                          styles.progressFill,
-                          { width: `${percent}%`, backgroundColor: color },
-                        ]}
-                      />
-                    </View>
-                  </View>
-                );
-              })}
+                  );
+                },
+              )}
             </View>
           </>
         ) : (
@@ -325,12 +363,13 @@ const PollScreen = () => {
 
 const styles = StyleSheet.create({
   surface: { flex: 1, padding: 16 },
+  heroDock: { marginBottom: 4 },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.card,
+    backgroundColor: "#09090C",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 13,
     borderRadius: 18,
     gap: 8,
@@ -338,15 +377,17 @@ const styles = StyleSheet.create({
   },
   statusText: { color: COLORS.text, flex: 1, ...TYPOGRAPHY.label },
   toolbarCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "#09090C",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 16,
     marginBottom: 16,
     gap: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
-  toolbarCopy: { gap: 4 },
+  toolbarCopy: { gap: 4, flex: 1 },
   toolbarTitle: { color: COLORS.text, ...TYPOGRAPHY.section },
   toolbarText: { color: COLORS.gray, ...TYPOGRAPHY.label },
   createPollBtn: {
@@ -363,10 +404,10 @@ const styles = StyleSheet.create({
   },
   createPollBtnText: { color: COLORS.text, ...TYPOGRAPHY.label },
   insightCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "#09090C",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 16,
     marginBottom: 16,
     flexDirection: "row",
@@ -378,11 +419,12 @@ const styles = StyleSheet.create({
   pollSelector: { gap: 10, paddingBottom: 14 },
   pollChip: {
     width: 210,
-    backgroundColor: COLORS.card,
+    backgroundColor: "#09090C",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 14,
+    gap: 10,
   },
   pollChipActive: {
     borderColor: COLORS.primary,
@@ -391,10 +433,10 @@ const styles = StyleSheet.create({
   pollChipText: { color: COLORS.gray, ...TYPOGRAPHY.label },
   pollChipTextActive: { color: COLORS.text },
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: "#09090C",
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 18,
     marginBottom: 24,
     gap: 12,
@@ -409,7 +451,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     opacity: 1,
-    backgroundColor: "rgba(255,255,255,0.02)",
+    backgroundColor: "#101015",
   },
   optionLabel: {
     flexDirection: "row",
@@ -419,10 +461,10 @@ const styles = StyleSheet.create({
   },
   optionText: { color: COLORS.text, ...TYPOGRAPHY.section, fontSize: 16 },
   resultsCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: "#09090C",
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "rgba(255,255,255,0.06)",
     padding: 18,
     gap: 16,
   },

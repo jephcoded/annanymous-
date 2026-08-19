@@ -16,26 +16,48 @@ const sanitizeLimit = (value, fallback, max) => {
   return Math.min(Math.floor(parsed), max);
 };
 
-const logActivity = async ({ adminUserId, action, entityType, entityId, meta = {} }) => {
+const logActivity = async ({
+  adminUserId,
+  action,
+  entityType,
+  entityId,
+  meta = {},
+}) => {
   await db.query(
     `INSERT INTO admin_activity_logs (admin_user_id, action, entity_type, entity_id, meta)
      VALUES ($1, $2, $3, $4, $5::jsonb)`,
-    [adminUserId, action, entityType, entityId ? String(entityId) : null, JSON.stringify(meta)],
+    [
+      adminUserId,
+      action,
+      entityType,
+      entityId ? String(entityId) : null,
+      JSON.stringify(meta),
+    ],
   );
 };
 
-const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimit }) => {
-  const [statsResult, postsResult, reportsResult, bannedResult, activityResult] =
-    await Promise.all([
-      db.query(
-        `SELECT
+const getOverview = async ({
+  recentLimit,
+  reportLimit,
+  bannedLimit,
+  activityLimit,
+}) => {
+  const [
+    statsResult,
+    postsResult,
+    reportsResult,
+    bannedResult,
+    activityResult,
+  ] = await Promise.all([
+    db.query(
+      `SELECT
            (SELECT COUNT(*)::int FROM users) AS "totalUsers",
            (SELECT COUNT(*)::int FROM posts WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())) AS "activePosts",
            (SELECT COUNT(*)::int FROM post_flags WHERE status = 'open') AS "reportedPosts",
            (SELECT COUNT(*)::int FROM users WHERE is_banned = TRUE) AS "bannedUsers"`,
-      ),
-      db.query(
-        `SELECT
+    ),
+    db.query(
+      `SELECT
            p.id,
            p.body,
            p.created_at AS "createdAt",
@@ -46,10 +68,10 @@ const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimi
          WHERE p.deleted_at IS NULL
          ORDER BY p.id DESC
          LIMIT $1`,
-        [sanitizeLimit(recentLimit, 5, MAX_RECENT_POSTS)],
-      ),
-      db.query(
-        `SELECT
+      [sanitizeLimit(recentLimit, 5, MAX_RECENT_POSTS)],
+    ),
+    db.query(
+      `SELECT
            pf.id,
            pf.post_id AS "postId",
            pf.reason,
@@ -65,10 +87,10 @@ const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimi
          WHERE pf.status = 'open'
          ORDER BY pf.id DESC
          LIMIT $1`,
-        [sanitizeLimit(reportLimit, 5, MAX_REPORTS)],
-      ),
-      db.query(
-        `SELECT
+      [sanitizeLimit(reportLimit, 5, MAX_REPORTS)],
+    ),
+    db.query(
+      `SELECT
            id,
            wallet_address AS "walletAddress",
            banned_reason AS "bannedReason",
@@ -77,10 +99,10 @@ const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimi
          WHERE is_banned = TRUE
          ORDER BY banned_at DESC NULLS LAST, id DESC
          LIMIT $1`,
-        [sanitizeLimit(bannedLimit, 5, MAX_BANNED_USERS)],
-      ),
-      db.query(
-        `SELECT
+      [sanitizeLimit(bannedLimit, 5, MAX_BANNED_USERS)],
+    ),
+    db.query(
+      `SELECT
            aal.id,
            aal.action,
            aal.entity_type AS "entityType",
@@ -92,9 +114,9 @@ const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimi
          LEFT JOIN users u ON u.id = aal.admin_user_id
          ORDER BY aal.id DESC
          LIMIT $1`,
-        [sanitizeLimit(activityLimit, 6, MAX_ACTIVITY)],
-      ),
-    ]);
+      [sanitizeLimit(activityLimit, 6, MAX_ACTIVITY)],
+    ),
+  ]);
 
   return {
     stats: statsResult.rows[0] || {
@@ -128,9 +150,10 @@ const getOverview = async ({ recentLimit, reportLimit, bannedLimit, activityLimi
 const getTrends = async ({ days }) => {
   const sanitizedDays = sanitizeLimit(days, 14, MAX_TREND_DAYS);
 
-  const [seriesResult, categoryResult, trendingPostsResult] = await Promise.all([
-    db.query(
-      `WITH day_series AS (
+  const [seriesResult, categoryResult, trendingPostsResult] = await Promise.all(
+    [
+      db.query(
+        `WITH day_series AS (
          SELECT generate_series(
            date_trunc('day', NOW()) - ($1::int - 1) * interval '1 day',
            date_trunc('day', NOW()),
@@ -176,10 +199,10 @@ const getTrends = async ({ days }) => {
          GROUP BY DATE(created_at)
        ) votes ON votes.day = ds.day
        ORDER BY ds.day ASC`,
-      [sanitizedDays],
-    ),
-    db.query(
-      `SELECT
+        [sanitizedDays],
+      ),
+      db.query(
+        `SELECT
          COALESCE(NULLIF(TRIM(category), ''), 'general') AS category,
          COUNT(*)::int AS count
        FROM posts
@@ -188,10 +211,10 @@ const getTrends = async ({ days }) => {
        GROUP BY COALESCE(NULLIF(TRIM(category), ''), 'general')
        ORDER BY count DESC, category ASC
        LIMIT 6`,
-      [sanitizedDays],
-    ),
-    db.query(
-      `SELECT
+        [sanitizedDays],
+      ),
+      db.query(
+        `SELECT
          p.id,
          p.body,
          p.category,
@@ -227,9 +250,10 @@ const getTrends = async ({ days }) => {
          AND p.deleted_at IS NULL
        ORDER BY "trendingScore" DESC, p.id DESC
        LIMIT 5`,
-      [sanitizedDays],
-    ),
-  ]);
+        [sanitizedDays],
+      ),
+    ],
+  );
 
   const series = seriesResult.rows;
   const totals = series.reduce(
@@ -412,7 +436,10 @@ const deleteAllPosts = async ({ adminUserId, reason }) => {
     action: "delete_all_posts",
     entityType: "post",
     entityId: null,
-    meta: { deletedCount: result.rowCount, reason: reason?.trim() || "Cleared by admin" },
+    meta: {
+      deletedCount: result.rowCount,
+      reason: reason?.trim() || "Cleared by admin",
+    },
   });
 
   return {

@@ -625,6 +625,11 @@ const CommunitiesScreen = () => {
           const isPending = item.status === "pending";
           const isAdmin = Boolean(item.isAdmin);
           const isActive = item.status === "active" || isAdmin;
+          const roomStateLabel = isPending
+            ? "Approval needed"
+            : item.isPrivate
+              ? "Invite only"
+              : "Open room";
           const actionLabel = isPending
             ? "Pending"
             : isAdmin
@@ -672,6 +677,8 @@ const CommunitiesScreen = () => {
                   style={[
                     styles.joinPill,
                     isCompact && styles.joinPillCompact,
+                    isActive && styles.joinPillOpen,
+                    isAdmin && styles.joinPillOwner,
                     isPending && styles.joinPillDisabled,
                   ]}
                   disabled={isPending || joiningId === item.id}
@@ -704,6 +711,31 @@ const CommunitiesScreen = () => {
                 {item.description ||
                   "Talk, gist, and connect with your people."}
               </Text>
+
+              <View style={styles.communityFootRow}>
+                <View style={styles.communityBadgeRow}>
+                  <View
+                    style={[
+                      styles.communityBadge,
+                      isPending && styles.communityBadgePending,
+                    ]}
+                  >
+                    <Text style={styles.communityBadgeText}>{roomStateLabel}</Text>
+                  </View>
+                  <View style={styles.communityBadge}>
+                    <Text style={styles.communityBadgeText}>
+                      {isAdmin
+                        ? "Owner tools"
+                        : `${formatCompactCount(Math.max(item.memberCount, 1))} inside`}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name="arrow-forward"
+                  size={16}
+                  color={COLORS.primary}
+                />
+              </View>
             </TouchableOpacity>
           );
         }}
@@ -746,7 +778,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  headerTitle: { color: COLORS.text, ...TYPOGRAPHY.heading, fontSize: 30, lineHeight: 34 },
+  headerTitle: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.heading,
+    fontSize: 30,
+    lineHeight: 34,
+  },
   headerTitleCompact: {
     fontSize: 24,
     lineHeight: 30,
@@ -957,8 +994,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(139,61,255,0.12)",
-    backgroundColor: "#0D0A14",
+    borderColor: "rgba(139,61,255,0.18)",
+    backgroundColor: "#10081A",
     shadowColor: "#000",
     shadowOpacity: 0.16,
     shadowRadius: 12,
@@ -1019,6 +1056,17 @@ const styles = StyleSheet.create({
   joinPillDisabled: {
     opacity: 0.55,
   },
+  joinPillOpen: {
+    backgroundColor: "rgba(139,61,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.32)",
+    shadowOpacity: 0,
+  },
+  joinPillOwner: {
+    backgroundColor: "rgba(80, 210, 160, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(80, 210, 160, 0.32)",
+  },
   joinPillText: {
     color: "#F7F2FF",
     ...TYPOGRAPHY.meta,
@@ -1036,6 +1084,37 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.label,
     fontSize: 11,
     lineHeight: 15,
+  },
+  communityFootRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  communityBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    flex: 1,
+  },
+  communityBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.12)",
+  },
+  communityBadgePending: {
+    backgroundColor: "rgba(255,196,102,0.10)",
+    borderColor: "rgba(255,196,102,0.24)",
+  },
+  communityBadgeText: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.meta,
+    fontSize: 10,
+    lineHeight: 12,
   },
   footerSection: {
     marginTop: 8,

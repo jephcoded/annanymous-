@@ -42,6 +42,15 @@ anonymous-app-backend/uploads/*
 # typescript
 *.tsbuildinfo
 
+# build/debug logs and one-off CLI output
+*.log
+eas-*.txt
+apk-*.txt
+build-artifacts.txt
+*-dryrun.txt
+dns-check.json
+auth-smoke-result.json
+
 app-example
 
 # generated native folders

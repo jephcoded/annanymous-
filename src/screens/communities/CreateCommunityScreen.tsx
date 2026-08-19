@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import {
@@ -11,13 +12,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import HeroHeading from "../../components/HeroHeading";
 import GuideModal from "../../components/GuideModal";
+import HeroHeading from "../../components/HeroHeading";
 import ScreenSurface from "../../components/ScreenSurface";
 import { useWallet } from "../../contexts/WalletContext";
 import { createCommunity } from "../../services/api";
 import { COLORS, TYPOGRAPHY } from "../../theme";
+import { getFriendlyErrorMessage } from "../../utils/errorMessages";
 
 const COMMUNITY_PROMPTS = [
   "Campus updates and rumors",
@@ -29,6 +32,8 @@ const COMMUNITY_PROMPTS = [
 export default function CreateCommunityScreen() {
   const navigation = useNavigation<any>();
   const { token } = useWallet();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,27 +46,30 @@ export default function CreateCommunityScreen() {
 
     if (!token) {
       Alert.alert(
-        "Wallet required",
-        "Connect your wallet before creating a community.",
+        "Session required",
+        "Log in again before creating a community.",
       );
       return;
     }
 
     setLoading(true);
     try {
-      await createCommunity(token, {
+      const response = await createCommunity(token, {
         name: name.trim(),
         description: description.trim(),
       });
       Alert.alert(
         "Community created",
-        "Your room is live. Open Communities to invite people and start chatting.",
+        `Your room is live. Share code ${response.data.inviteCode} when you're ready to invite people.`,
       );
-      navigation.goBack();
+      navigation.replace("CommunityChat", {
+        communityId: response.data.id,
+        communityName: response.data.name,
+      });
     } catch (error) {
       Alert.alert(
         "Create failed",
-        error instanceof Error ? error.message : "Failed to create community.",
+        getFriendlyErrorMessage(error, "Failed to create community."),
       );
     } finally {
       setLoading(false);
@@ -69,16 +77,22 @@ export default function CreateCommunityScreen() {
   };
 
   const canSubmit = name.trim().length > 0 && !loading;
+  const bottomSpacing = tabBarHeight + Math.max(insets.bottom, 14) + 16;
 
   return (
     <ScreenSurface style={styles.surface}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        stickyHeaderIndices={[0]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: bottomSpacing },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <HeroHeading
           title="Create Room"
-          subtitle="Spin up a private room, set the tone, and share invite codes with the people you trust."
+          subtitle="Private room. Invite who matters."
+          artSection="community"
           ctaLabel="Ready to launch"
           ctaIcon="sparkles-outline"
           stats={[
@@ -93,6 +107,7 @@ export default function CreateCommunityScreen() {
               color: COLORS.secondary,
             },
           ]}
+          subtitleLines={2}
         />
 
         <GuideModal
@@ -105,7 +120,7 @@ export default function CreateCommunityScreen() {
           ]}
         />
 
-        <View style={styles.formCard}>
+        <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Community details</Text>
           <TextInput
             style={styles.input}
@@ -125,12 +140,14 @@ export default function CreateCommunityScreen() {
             maxLength={160}
           />
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>Name keeps the room discoverable to invited members.</Text>
+            <Text style={styles.metaText}>
+              Name keeps the room discoverable to invited members.
+            </Text>
             <Text style={styles.metaText}>{name.trim().length}/32</Text>
           </View>
         </View>
 
-        <View style={styles.promptCard}>
+        <View style={styles.promptSection}>
           <Text style={styles.sectionTitle}>Fast room ideas</Text>
           <View style={styles.promptRow}>
             {COMMUNITY_PROMPTS.map((prompt) => (
@@ -151,14 +168,16 @@ export default function CreateCommunityScreen() {
           </View>
         </View>
 
-        <View style={styles.rulesCard}>
+        <View style={styles.rulesSection}>
           <View style={styles.ruleRow}>
             <Ionicons
               name="checkmark-circle-outline"
               size={18}
               color={COLORS.primary}
             />
-            <Text style={styles.ruleText}>Creator becomes the first admin.</Text>
+            <Text style={styles.ruleText}>
+              Creator becomes the first admin.
+            </Text>
           </View>
           <View style={styles.ruleRow}>
             <Ionicons
@@ -166,7 +185,9 @@ export default function CreateCommunityScreen() {
               size={18}
               color={COLORS.primary}
             />
-            <Text style={styles.ruleText}>Invite codes are how new members get in.</Text>
+            <Text style={styles.ruleText}>
+              Invite codes are how new members get in.
+            </Text>
           </View>
           <View style={styles.ruleRow}>
             <Ionicons
@@ -174,12 +195,18 @@ export default function CreateCommunityScreen() {
               size={18}
               color={COLORS.primary}
             />
-            <Text style={styles.ruleText}>Messages stay inside the room once access is granted.</Text>
+            <Text style={styles.ruleText}>
+              Messages stay inside the room once access is granted.
+            </Text>
           </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.createButton, !canSubmit && styles.createButtonDisabled]}
+          style={[
+            styles.createButton,
+            !canSubmit && styles.createButtonDisabled,
+            { marginBottom: Math.max(insets.bottom, 10) },
+          ]}
           onPress={handleCreate}
           disabled={!canSubmit}
         >
@@ -204,19 +231,18 @@ export default function CreateCommunityScreen() {
 const styles = StyleSheet.create({
   surface: { flex: 1, padding: 16 },
   content: { paddingBottom: 60 },
-  formCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
+  formSection: {
+    paddingTop: 6,
+    paddingBottom: 18,
     marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   sectionTitle: { color: COLORS.text, ...TYPOGRAPHY.section, marginBottom: 12 },
   input: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: `${COLORS.primary}18`,
     backgroundColor: "rgba(255,255,255,0.03)",
     color: COLORS.text,
     paddingHorizontal: 14,
@@ -238,13 +264,11 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
     flex: 1,
   },
-  promptCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
+  promptSection: {
+    paddingBottom: 18,
     marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   promptRow: {
     flexDirection: "row",
@@ -263,14 +287,12 @@ const styles = StyleSheet.create({
     color: COLORS.secondary,
     ...TYPOGRAPHY.meta,
   },
-  rulesCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 18,
+  rulesSection: {
+    paddingBottom: 18,
     gap: 12,
     marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   ruleRow: {
     flexDirection: "row",

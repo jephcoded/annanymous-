@@ -2,31 +2,31 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CoreHelperUtil, WcController } from "@reown/appkit-core-react-native";
 import { hexlify, toUtf8Bytes } from "ethers/lib/utils";
 import React, {
-    createContext,
-    ReactNode,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import { AppState, AppStateStatus, Linking, Platform } from "react-native";
 
 import { API_BASE_URL } from "../config/api";
 import { ensureAppKit, getAppKit } from "../config/appKit";
 import { WEB3_CONFIG } from "../config/web3";
-import { registerForPushNotificationsAsync } from "../services/pushNotifications";
 import {
-    getMe,
-    getSettings,
-    loginWithPassword,
+  getMe,
+  getSettings,
+  loginWithPassword,
+  registerAuthFailureHandler,
   registerPushToken,
-    registerAuthFailureHandler,
-    signupWithPassword,
-    updateSettings,
-    UserSettings,
+  signupWithPassword,
+  updateSettings,
+  UserSettings,
 } from "../services/api";
+import { registerForPushNotificationsAsync } from "../services/pushNotifications";
 
 const WALLET_SESSION_KEY = "ananymous.wallet.session";
 const WALLET_PENDING_CONNECT_KEY = "ananymous.wallet.pending-connect";
@@ -659,6 +659,12 @@ export const BrowserWalletProvider = ({
       disconnectWallet,
       refreshSettings,
       updateAppSettings,
+      signIn: async () => {
+        setError("Sign in is not available in this fallback mode.");
+      },
+      signUp: async () => {
+        setError("Create account is not available in this fallback mode.");
+      },
     }),
     [
       connectWallet,

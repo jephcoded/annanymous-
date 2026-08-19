@@ -17,7 +17,9 @@ const chunk = (items, size) => {
 };
 
 const compactText = (value, fallback) => {
-  const normalized = String(value || fallback || "").trim().replace(/\s+/g, " ");
+  const normalized = String(value || fallback || "")
+    .trim()
+    .replace(/\s+/g, " ");
 
   if (!normalized) {
     return fallback;
@@ -27,6 +29,16 @@ const compactText = (value, fallback) => {
     ? `${normalized.slice(0, MAX_BODY_LENGTH - 1).trim()}...`
     : normalized;
 };
+
+const buildPushMessage = ({ pushToken, title, body, meta }) => ({
+  to: pushToken,
+  sound: "default",
+  channelId: "default",
+  priority: "high",
+  title,
+  body,
+  data: meta,
+});
 
 const listGlobalRecipients = async (excludeUserId) => {
   await User.ensurePushTokenSchema();
@@ -66,6 +78,37 @@ const listCommunityRecipients = async ({ communityId, excludeUserId }) => {
        AND cm.user_id <> $2
        AND COALESCE(us.push_enabled, TRUE) = TRUE`,
     [communityId, excludeUserId],
+  );
+
+  return result.rows;
+};
+
+const listUserRecipients = async ({ userIds, excludeUserId = null }) => {
+  const normalizedUserIds = [...new Set(
+    (userIds || [])
+      .map((userId) => Number(userId))
+      .filter((userId) => Number.isFinite(userId) && userId > 0)
+      .filter((userId) => userId !== Number(excludeUserId || 0)),
+  )];
+
+  if (!normalizedUserIds.length) {
+    return [];
+  }
+
+  await User.ensurePushTokenSchema();
+
+  const result = await db.query(
+    `SELECT DISTINCT
+       upt.user_id AS "userId",
+       upt.expo_push_token AS "pushToken"
+     FROM user_push_tokens upt
+     INNER JOIN users u ON u.id = upt.user_id
+     LEFT JOIN user_settings us ON us.user_id = upt.user_id
+     WHERE upt.disabled_at IS NULL
+       AND u.is_banned = FALSE
+       AND upt.user_id = ANY($1::bigint[])
+       AND COALESCE(us.push_enabled, TRUE) = TRUE`,
+    [normalizedUserIds],
   );
 
   return result.rows;
@@ -114,13 +157,42 @@ const fanout = async ({ recipients, type, title, body, meta }) => {
   );
 
   await sendExpoMessages(
-    recipients.map((recipient) => ({
-      to: recipient.pushToken,
-      sound: "default",
-      title,
-      body,
-      data: meta,
-    })),
+    recipients.map((recipient) =>
+      buildPushMessage({
+        pushToken: recipient.pushToken,
+        title,
+        body,
+        meta,
+      }),
+    ),
+  );
+};
+
+exports.pushToUsers = async ({
+  recipientUserIds,
+  excludeUserId = null,
+  title,
+  body,
+  meta = {},
+}) => {
+  const recipients = await listUserRecipients({
+    userIds: recipientUserIds,
+    excludeUserId,
+  });
+
+  if (!recipients.length) {
+    return;
+  }
+
+  await sendExpoMessages(
+    recipients.map((recipient) =>
+      buildPushMessage({
+        pushToken: recipient.pushToken,
+        title,
+        body: compactText(body, title),
+        meta,
+      }),
+    ),
   );
 };
 

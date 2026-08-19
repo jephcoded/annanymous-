@@ -1,103 +1,253 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+    Linking,
     RefreshControl,
     ScrollView,
+    Share,
     StyleSheet,
     Switch,
-    TouchableOpacity
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
-import HeroHeading from "../components/HeroHeading";
+
 import ScreenSurface from "../components/ScreenSurface";
-import { ThemedText } from "../../components/themed-text";
-import { ThemedView } from "../../components/themed-view";
 import { useWallet } from "../contexts/WalletContext";
 import {
     NotificationItem,
-    UserSettings,
+    SessionAccess,
     WalletProfile,
     getMe,
     getNotifications,
     markAllNotificationsRead,
     markNotificationRead,
-    updateSettings,
+    updateProfile,
 } from "../services/api";
 import { COLORS, TYPOGRAPHY } from "../theme";
-import ConnectWalletScreen from "./auth/ConnectWalletScreen";
+import { getFriendlyErrorMessage } from "../utils/errorMessages";
 
-type WalletTab = "overview" | "notifications" | "settings";
+const ONBOARDING_KEY = "ananymous.onboarding.complete";
+const PROFILE_ACCENT_KEY = "ananymous.profile.accent";
+const PROFILE_ACCENT_OPTIONS = [
+  "#7D3CFF",
+  "#4F7DFF",
+  "#49D97F",
+  "#E95AAE",
+  "#FF9B2D",
+] as const;
+
+type ProfileTab =
+  | "overview"
+  | "alerts"
+  | "settings"
+  | "privacy"
+  | "edit"
+  | "appearance"
+  | "content"
+  | "support";
+
+const SUPPORT_EMAIL = "support@ananymous.app";
+const THEME_OPTIONS = [
+  {
+    id: "dark",
+    title: "Dark",
+    description: "Balanced black surfaces with a soft edge glow.",
+  },
+  {
+    id: "midnight",
+    title: "Midnight Black",
+    description: "Deeper black surfaces with lower contrast chrome.",
+  },
+  {
+    id: "obsidian",
+    title: "Obsidian",
+    description: "Pure black panels with the strongest focus on text.",
+  },
+] as const;
 
 const formatDate = (timestamp: string) => new Date(timestamp).toLocaleString();
 
-const shortenWalletAddress = (address?: string | null) => {
-  if (!address) {
-    return "Wallet connected";
-  }
+const buildMailtoUrl = (recipient: string, subject: string, body: string) =>
+  `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-  if (address.length <= 14) {
-    return address;
-  }
-
-  return `${address.slice(0, 8)}...${address.slice(-6)}`;
-};
-
-const getReputationSnapshot = (profile: WalletProfile | null) => {
-  const postCount = profile?.postCount ?? 0;
-  const commentCount = profile?.commentCount ?? 0;
-  const voteCount = profile?.voteCount ?? 0;
-  const karmaPoints = postCount * 5 + commentCount * 3 + voteCount;
-  const engagementScore = Math.min(
-    100,
-    postCount * 8 + commentCount * 5 + voteCount * 2,
+const parseKeywordList = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
   );
 
-  let badge = "New voice";
-  if (karmaPoints >= 80) {
-    badge = "Top contributor";
-  } else if (karmaPoints >= 40) {
-    badge = "Trusted source";
-  } else if (karmaPoints >= 20) {
-    badge = "Rising signal";
+const shortenIdentity = (value?: string | null) => {
+  if (!value) {
+    return "ANON user";
   }
 
-  return { karmaPoints, engagementScore, badge };
+  if (value.length <= 18) {
+    return value;
+  }
+
+  return `${value.slice(0, 10)}...${value.slice(-4)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace("#", "");
+  const safeHex =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("")
+      : normalized;
+
+  const red = Number.parseInt(safeHex.slice(0, 2), 16);
+  const green = Number.parseInt(safeHex.slice(2, 4), 16);
+  const blue = Number.parseInt(safeHex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
 const WalletScreen = () => {
-  const { address, token, isConnected, disconnectWallet } = useWallet();
-  const [activeTab, setActiveTab] = useState<WalletTab>("overview");
+  const { address, token, disconnectWallet, settings, updateAppSettings } =
+    useWallet();
+  const { width } = useWindowDimensions();
+  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [profile, setProfile] = useState<WalletProfile | null>(null);
-  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [access, setAccess] = useState<SessionAccess | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [notificationSearchQuery, setNotificationSearchQuery] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [profileAccent, setProfileAccent] = useState<string>(
+    PROFILE_ACCENT_OPTIONS[0],
+  );
+  const [mutedKeywordDraft, setMutedKeywordDraft] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [privacyPrefs, setPrivacyPrefs] = useState({
+    hideOnlineStatus: true,
+    allowComments: true,
+    allowDirectMessages: false,
+    showPostsInFeed: true,
+    safeMode: true,
+  });
 
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.isRead).length,
+  const isCompact = width < 390;
+  const isSubpage = activeTab !== "overview";
+
+  const profileName = useMemo(() => {
+    if (profile?.displayName?.trim()) {
+      return profile.displayName.trim();
+    }
+
+    if (profile?.email?.trim()) {
+      return profile.email.trim().split("@")[0];
+    }
+
+    return shortenIdentity(address);
+  }, [address, profile?.displayName, profile?.email]);
+
+  const profileHandle = useMemo(
+    () => shortenIdentity(profile?.email || profile?.walletAddress || address),
+    [address, profile?.email, profile?.walletAddress],
+  );
+
+  const profileBio = useMemo(
+    () => profile?.bio?.trim() || "Sharing thoughts, not identity.",
+    [profile?.bio],
+  );
+
+  const filteredNotifications = useMemo(() => {
+    const query = notificationSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return notifications;
+    }
+
+    return notifications.filter((item: NotificationItem) =>
+      [item.title, item.body, item.type]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [notificationSearchQuery, notifications]);
+
+  const recentActivity = useMemo(
+    () =>
+      notifications.slice(0, 3).map((item: NotificationItem) => ({
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        time: formatDate(item.createdAt),
+      })),
     [notifications],
   );
-  const reputation = useMemo(
-    () => getReputationSnapshot(profile),
-    [profile],
+
+  const headerMeta = useMemo(
+    () =>
+      ({
+        overview: { title: "Profile", subtitle: "Your anonymous identity" },
+        alerts: {
+          title: "Alerts",
+          subtitle: "Posts, replies, rooms, signals.",
+        },
+        settings: {
+          title: "Settings",
+          subtitle: "Control the app from one place.",
+        },
+        privacy: {
+          title: "Privacy & Safety",
+          subtitle: "Identity, comments, visibility.",
+        },
+        edit: {
+          title: "Edit Profile",
+          subtitle: "Anonymous is your identity.",
+        },
+        appearance: {
+          title: "Appearance",
+          subtitle: "Choose how dark the app feels.",
+        },
+        content: {
+          title: "Content Preferences",
+          subtitle: "Filter what reaches your feed.",
+        },
+        support: {
+          title: "Support",
+          subtitle: "Get help or send a report quickly.",
+        },
+      })[activeTab],
+    [activeTab],
   );
-  const accountHealth = useMemo(() => {
-    const completedSignals = [
-      Boolean(profile?.postCount),
-      Boolean(profile?.commentCount),
-      Boolean(profile?.voteCount),
-      Boolean(settings?.pushEnabled),
-    ].filter(Boolean).length;
 
-    if (completedSignals >= 4) {
-      return "High activity";
-    }
+  const mutedKeywords = useMemo(
+    () => parseKeywordList(mutedKeywordDraft),
+    [mutedKeywordDraft],
+  );
 
-    if (completedSignals >= 2) {
-      return "Growing";
-    }
+  const activeThemeOption = useMemo(
+    () =>
+      THEME_OPTIONS.find((option) => option.id === settings?.theme) ||
+      THEME_OPTIONS[0],
+    [settings?.theme],
+  );
 
-    return "Early setup";
-  }, [profile, settings]);
+  const profileAccentSurface = useMemo(
+    () => hexToRgba(profileAccent, 0.22),
+    [profileAccent],
+  );
+
+  const profileAccentBorder = useMemo(
+    () => hexToRgba(profileAccent, 0.46),
+    [profileAccent],
+  );
 
   const loadWallet = useCallback(async () => {
     if (!token) {
@@ -111,45 +261,214 @@ const WalletScreen = () => {
         getNotifications(token),
       ]);
       setProfile(meResponse.data.profile);
-      setSettings(meResponse.data.settings);
+      setAccess(meResponse.data.access);
       setNotifications(notificationsResponse.data);
       setStatusMessage(null);
     } catch (error) {
-      console.error("Wallet sync failed", error);
       setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to load your account right now.",
+        getFriendlyErrorMessage(
+          error,
+          "Unable to load your account right now.",
+        ),
       );
     } finally {
       setRefreshing(false);
     }
   }, [token]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadWallet();
+    }, [loadWallet]),
+  );
+
   useEffect(() => {
-    loadWallet();
-  }, [loadWallet]);
+    if (profile) {
+      setEditName(profile.displayName || "");
+      setEditBio(profile.bio || "");
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAccent = async () => {
+      try {
+        const storedAccent = await AsyncStorage.getItem(PROFILE_ACCENT_KEY);
+        if (
+          isMounted &&
+          storedAccent &&
+          PROFILE_ACCENT_OPTIONS.includes(
+            storedAccent as (typeof PROFILE_ACCENT_OPTIONS)[number],
+          )
+        ) {
+          setProfileAccent(storedAccent);
+        }
+      } catch {
+        // Ignore local accent persistence errors.
+      }
+    };
+
+    void loadAccent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (settings) {
+      setPrivacyPrefs({
+        hideOnlineStatus: !settings.emailEnabled,
+        allowComments: settings.pushEnabled,
+        allowDirectMessages: settings.directMessagesEnabled ?? false,
+        showPostsInFeed: settings.showWalletSummary,
+        safeMode: !settings.marketingEnabled,
+      });
+      setMutedKeywordDraft((settings.mutedKeywords || []).join(", "));
+    }
+  }, [settings]);
 
   const saveSettings = useCallback(
-    async (nextSettings: Partial<UserSettings>) => {
-      if (!token || !settings) {
+    async (nextSettings: Partial<typeof settings>) => {
+      if (!token) {
+        return false;
+      }
+
+      try {
+        await updateAppSettings(nextSettings);
+        return true;
+      } catch (error) {
+        setStatusMessage(
+          getFriendlyErrorMessage(error, "Unable to save settings."),
+        );
+        await loadWallet();
+        return false;
+      }
+    },
+    [loadWallet, token, updateAppSettings],
+  );
+
+  const updatePrivacyPref = useCallback(
+    async (key: keyof typeof privacyPrefs, value: boolean) => {
+      setPrivacyPrefs((current) => ({ ...current, [key]: value }));
+
+      if (key === "hideOnlineStatus") {
+        await saveSettings({ emailEnabled: !value });
+      }
+
+      if (key === "allowComments") {
+        await saveSettings({ pushEnabled: value });
+      }
+
+      if (key === "showPostsInFeed") {
+        await saveSettings({ showWalletSummary: value });
+      }
+
+      if (key === "safeMode") {
+        await saveSettings({ marketingEnabled: !value });
+      }
+
+      if (key === "allowDirectMessages") {
+        await saveSettings({ directMessagesEnabled: value });
+      }
+    },
+    [saveSettings],
+  );
+
+  const saveMutedKeywords = useCallback(
+    async (draft = mutedKeywordDraft) => {
+      const nextKeywords = parseKeywordList(draft);
+      const didSave = await saveSettings({ mutedKeywords: nextKeywords });
+      if (!didSave) {
         return;
       }
 
-      const merged = { ...settings, ...nextSettings };
-      setSettings(merged);
+      setMutedKeywordDraft(nextKeywords.join(", "));
+      setStatusMessage(
+        nextKeywords.length
+          ? "Muted keywords updated."
+          : "Muted keywords cleared.",
+      );
+    },
+    [mutedKeywordDraft, saveSettings],
+  );
+
+  const saveThemePreference = useCallback(
+    async (theme: typeof settings.theme) => {
+      const didSave = await saveSettings({ theme });
+      if (!didSave) {
+        return;
+      }
+
+      const nextTheme =
+        THEME_OPTIONS.find((option) => option.id === theme)?.title || "Dark";
+      setStatusMessage(`${nextTheme} appearance saved.`);
+    },
+    [saveSettings],
+  );
+
+  const openSupportComposer = useCallback(
+    async (mode: "help" | "report") => {
+      const subject =
+        mode === "report" ? "Ananymous bug report" : "Ananymous help request";
+      const body = [
+        `Display name: ${profileName}`,
+        profile?.id ? `Account ID: ${profile.id}` : null,
+        `Theme: ${activeThemeOption.title}`,
+        "",
+        mode === "report" ? "What went wrong?" : "How can we help you?",
+        "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const url = buildMailtoUrl(SUPPORT_EMAIL, subject, body);
+
       try {
-        const response = await updateSettings(token, nextSettings);
-        setSettings(response.data);
-      } catch (error) {
-        setStatusMessage(
-          error instanceof Error ? error.message : "Unable to save settings.",
-        );
-        await loadWallet();
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          setStatusMessage(
+            mode === "report"
+              ? "Opening your bug report email draft."
+              : "Opening your help email draft.",
+          );
+          return;
+        }
+      } catch {
+        // Fall through to the share sheet.
+      }
+
+      try {
+        await Share.share({
+          message: `Send this to ${SUPPORT_EMAIL}\n\nSubject: ${subject}\n\n${body}`,
+        });
+        setStatusMessage("Share sheet opened with your support details.");
+      } catch {
+        setStatusMessage("No mail app was found on this device.");
       }
     },
-    [loadWallet, settings, token],
+    [activeThemeOption.title, profile?.id, profileName],
   );
+
+  const shareFeedback = useCallback(async () => {
+    try {
+      await Share.share({
+        message: [
+          "Feedback for ANANYMOUS",
+          "",
+          "What feels great?",
+          "What should change?",
+          "",
+          `Send your notes to ${SUPPORT_EMAIL} if you want a direct reply.`,
+        ].join("\n"),
+      });
+      setStatusMessage("Feedback sheet opened.");
+    } catch {
+      setStatusMessage("Unable to open the feedback sheet right now.");
+    }
+  }, []);
 
   const markSingleRead = useCallback(
     async (notificationId: number) => {
@@ -159,16 +478,14 @@ const WalletScreen = () => {
 
       try {
         const response = await markNotificationRead(token, notificationId);
-        setNotifications((current) =>
-          current.map((item) =>
+        setNotifications((current: NotificationItem[]) =>
+          current.map((item: NotificationItem) =>
             item.id === notificationId ? response.data : item,
           ),
         );
       } catch (error) {
         setStatusMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to mark notification as read.",
+          getFriendlyErrorMessage(error, "Unable to update this alert."),
         );
       }
     },
@@ -182,470 +499,711 @@ const WalletScreen = () => {
 
     try {
       await markAllNotificationsRead(token);
-      setNotifications((current) =>
-        current.map((item) => ({ ...item, isRead: true })),
+      setNotifications((current: NotificationItem[]) =>
+        current.map((item: NotificationItem) => ({ ...item, isRead: true })),
       );
     } catch (error) {
       setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to update notifications.",
+        getFriendlyErrorMessage(error, "Unable to update alerts."),
       );
     }
   }, [token]);
 
-  if (!isConnected) {
-    return <ConnectWalletScreen />;
-  }
+  const saveProfileDraft = async () => {
+    if (!token) {
+      setStatusMessage("Your session expired. Log in again to continue.");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const response = await updateProfile(token, {
+        displayName: editName.trim(),
+        bio: editBio.trim(),
+      });
+      await AsyncStorage.setItem(PROFILE_ACCENT_KEY, profileAccent);
+      setProfile(response.data);
+      setStatusMessage("Profile updated.");
+      setActiveTab("overview");
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to save your profile."),
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const resetOnboarding = async () => {
+    await AsyncStorage.removeItem(ONBOARDING_KEY);
+    setStatusMessage("Onboarding will appear the next time the app starts.");
+  };
 
   return (
-    <ScreenSurface style={styles.surface} bleedTop>
+    <ScreenSurface
+      style={[styles.surface, isCompact && styles.surfaceCompact]}
+      bleedTop
+    >
       <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingVertical: 24,
-          paddingBottom: 140,
-        }}
+        stickyHeaderIndices={[0]}
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadWallet} />
         }
         showsVerticalScrollIndicator={false}
       >
-        <HeroHeading
-          title="Wallet"
-          subtitle={
-            shortenWalletAddress(address || profile?.walletAddress) ||
-            "Wallet connected"
-          }
-          ctaLabel="Refresh"
-          ctaIcon="refresh"
-          onPressCta={loadWallet}
-          stats={[
-            {
-              icon: "radio-outline",
-              label: `${profile?.postCount ?? 0} posts`,
-              color: COLORS.primary,
-            },
-            {
-              icon: "sparkles-outline",
-              label: `${unreadCount} unread`,
-              color: COLORS.secondary,
-            },
-            {
-              icon: "pulse-outline",
-              label: accountHealth,
-              color: COLORS.gray,
-            },
-          ]}
-        />
-
-        <ThemedView style={styles.tabRow}>
-          {(["overview", "notifications", "settings"] as WalletTab[]).map(
-            (tab) => {
-              const active = activeTab === tab;
-              return (
+        <View
+          style={[styles.headerCard, isCompact && styles.headerCardCompact]}
+        >
+          <View
+            style={[
+              styles.headerTopRow,
+              isCompact && styles.headerTopRowCompact,
+            ]}
+          >
+            <View style={styles.headerLead}>
+              {isSubpage ? (
                 <TouchableOpacity
-                  key={tab}
-                  style={[styles.tabBtn, active && styles.tabBtnActive]}
-                  onPress={() => setActiveTab(tab)}
+                  style={styles.headerIconButton}
+                  onPress={() => setActiveTab("overview")}
                 >
-                  <ThemedText
-                    type={active ? "defaultSemiBold" : "default"}
-                    style={[styles.tabText, active && styles.tabTextActive]}
-                  >
-                    {tab === "notifications"
-                      ? "Alerts"
-                      : tab[0].toUpperCase() + tab.slice(1)}
-                  </ThemedText>
+                  <Ionicons name="chevron-back" size={18} color={COLORS.text} />
                 </TouchableOpacity>
-              );
-            },
-          )}
-        </ThemedView>
+              ) : null}
+              <View>
+                <Text style={styles.headerTitle}>{headerMeta.title}</Text>
+                <Text style={styles.headerSubtitle}>{headerMeta.subtitle}</Text>
+              </View>
+            </View>
 
-        {statusMessage && (
-          <ThemedView style={styles.statusBanner}>
+            {!isSubpage ? (
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.headerIconButton}
+                  onPress={() => setActiveTab("alerts")}
+                >
+                  <Ionicons
+                    name="search-outline"
+                    size={18}
+                    color={COLORS.accent}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerIconButton}
+                  onPress={() => setActiveTab("settings")}
+                >
+                  <Ionicons
+                    name="settings-outline"
+                    size={18}
+                    color={COLORS.accent}
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {statusMessage ? (
+          <View style={styles.statusBanner}>
             <Ionicons
-              name="warning-outline"
+              name="information-circle-outline"
               size={16}
               color={COLORS.secondary}
             />
-            <ThemedText type="defaultSemiBold" style={styles.statusText}>
-              {statusMessage}
-            </ThemedText>
-          </ThemedView>
-        )}
+            <Text style={styles.statusText}>{statusMessage}</Text>
+          </View>
+        ) : null}
 
-        {activeTab === "overview" && (
-          <ThemedView style={styles.card}>
-            <ThemedView style={styles.healthBanner}>
-              <ThemedView>
-                <ThemedText type="default" style={styles.healthLabel}>
-                  Identity status
-                </ThemedText>
-                <ThemedText type="defaultSemiBold" style={styles.healthValue}>
-                  {accountHealth}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.healthPill}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={16}
-                  color={COLORS.primary}
-                />
-                <ThemedText type="default" style={styles.healthPillText}>
-                  Masked access layer
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
-            <ThemedView style={styles.accountHeader}>
-              <ThemedView style={styles.iconWrap}>
-                <Ionicons
-                  name="shield-half-outline"
-                  size={32}
-                  color={COLORS.primary}
-                />
-              </ThemedView>
-              <ThemedView style={styles.accountCopy}>
-                <ThemedText type="title" style={styles.title}>
-                  Account
-                </ThemedText>
-                <ThemedText type="defaultSemiBold" style={styles.address}>
-                  {shortenWalletAddress(profile?.walletAddress || address)}
-                </ThemedText>
-                <ThemedText type="default" style={styles.caption}>
-                  Member since{" "}
-                  {profile?.createdAt ? formatDate(profile.createdAt) : "--"}
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
-
-            <ThemedView style={styles.addressCard}>
-              <ThemedText type="default" style={styles.addressCardLabel}>
-                Wallet address
-              </ThemedText>
-              <ThemedText type="defaultSemiBold" style={styles.addressCardValue}>
-                {profile?.walletAddress || address}
-              </ThemedText>
-            </ThemedView>
-
-            <ThemedView style={styles.identityStrip}>
-              <ThemedView style={styles.identityPill}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={14}
-                  color={COLORS.primary}
-                />
-                <ThemedText type="default" style={styles.identityText}>
-                  Verified wallet
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.identityPill}>
-                <Ionicons
-                  name="sparkles-outline"
-                  size={14}
-                  color={COLORS.secondary}
-                />
-                <ThemedText type="default" style={styles.identityText}>
-                  {unreadCount} live signals
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
-
-            <ThemedView style={styles.accountSummaryRow}>
-              <ThemedView style={styles.accountSummaryCard}>
-                <ThemedText type="default" style={styles.accountSummaryLabel}>
-                  Posts
-                </ThemedText>
-                <ThemedText type="defaultSemiBold" style={styles.accountSummaryValue}>
-                  {profile?.postCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.accountSummaryCard}>
-                <ThemedText type="default" style={styles.accountSummaryLabel}>
-                  Replies
-                </ThemedText>
-                <ThemedText type="defaultSemiBold" style={styles.accountSummaryValue}>
-                  {profile?.commentCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.accountSummaryCard}>
-                <ThemedText type="default" style={styles.accountSummaryLabel}>
-                  Signals
-                </ThemedText>
-                <ThemedText type="defaultSemiBold" style={styles.accountSummaryValue}>
-                  {profile?.voteCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
-
-            <ThemedView style={styles.buyerSignalCard}>
-              <ThemedText type="defaultSemiBold" style={styles.buyerSignalTitle}>
-                Standing
-              </ThemedText>
-              <ThemedText type="default" style={styles.buyerSignalText}>
-                Your wallet unlocks posting, reactions, communities, and reputation without exposing your public identity inside the app.
-              </ThemedText>
-            </ThemedView>
-
-            <ThemedView style={styles.reputationCard}>
-              <ThemedView style={styles.reputationHeader}>
-                <ThemedView>
-                  <ThemedText type="defaultSemiBold" style={styles.reputationTitle}>
-                    Reputation
-                  </ThemedText>
-                  <ThemedText type="default" style={styles.reputationSubtitle}>
-                    Credibility that grows from participation, not profile exposure.
-                  </ThemedText>
-                </ThemedView>
-                <ThemedView style={styles.reputationBadge}>
+        {activeTab === "overview" ? (
+          <View>
+            <View style={styles.profileHeroCard}>
+              <View style={styles.profileAvatarShell}>
+                <View
+                  style={[
+                    styles.profileAvatar,
+                    {
+                      backgroundColor: profileAccentSurface,
+                      borderColor: profileAccentBorder,
+                    },
+                  ]}
+                >
                   <Ionicons
-                    name="ribbon-outline"
-                    size={14}
-                    color={COLORS.primary}
+                    name="shield-half-outline"
+                    size={56}
+                    color={COLORS.accent}
                   />
-                  <ThemedText type="default" style={styles.reputationBadgeText}>
-                    {reputation.badge}
-                  </ThemedText>
-                </ThemedView>
-              </ThemedView>
-              <ThemedView style={styles.reputationStats}>
-                <ThemedView style={styles.reputationStat}>
-                  <ThemedText type="default" style={styles.reputationStatLabel}>
-                    Karma
-                  </ThemedText>
-                  <ThemedText style={styles.reputationStatValue}>
-                    {reputation.karmaPoints}
-                  </ThemedText>
-                </ThemedView>
-                <ThemedView style={styles.reputationStat}>
-                  <ThemedText type="default" style={styles.reputationStatLabel}>
-                    Engagement
-                  </ThemedText>
-                  <ThemedText style={styles.reputationStatValue}>
-                    {reputation.engagementScore}
-                  </ThemedText>
-                </ThemedView>
-              </ThemedView>
-            </ThemedView>
+                </View>
+                <TouchableOpacity
+                  style={styles.editAvatarButton}
+                  onPress={() => setActiveTab("edit")}
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={14}
+                    color={COLORS.text}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.profileName}>{profileName}</Text>
+              <Text style={styles.profileStatus}>Active now</Text>
+              <Text style={styles.profileBio}>{profileBio}</Text>
 
-            <ThemedView style={styles.statsRow}>
-              <ThemedView style={styles.statCard}>
+              <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>
+                    {profile?.postCount ?? 0}
+                  </Text>
+                  <Text style={styles.statLabel}>Posts</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>
+                    {profile?.commentCount ?? 0}
+                  </Text>
+                  <Text style={styles.statLabel}>Comments</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>
+                    {profile?.voteCount ?? 0}
+                  </Text>
+                  <Text style={styles.statLabel}>Likes</Text>
+                </View>
+              </View>
+
+              <View style={styles.quickActionRow}>
+                <TouchableOpacity
+                  style={styles.quickActionCard}
+                  onPress={() =>
+                    setStatusMessage("Your posts page is coming next.")
+                  }
+                >
+                  <Ionicons
+                    name="list-outline"
+                    size={18}
+                    color={COLORS.accent}
+                  />
+                  <Text style={styles.quickActionText}>My Posts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickActionCard}
+                  onPress={() =>
+                    setStatusMessage("Saved posts page is coming next.")
+                  }
+                >
+                  <Ionicons
+                    name="bookmark-outline"
+                    size={18}
+                    color={COLORS.accent}
+                  />
+                  <Text style={styles.quickActionText}>Saved</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                <TouchableOpacity onPress={() => setActiveTab("alerts")}>
+                  <Text style={styles.sectionLink}>See all</Text>
+                </TouchableOpacity>
+              </View>
+
+              {recentActivity.length ? (
+                recentActivity.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.activityRow}
+                    onPress={() => markSingleRead(item.id)}
+                  >
+                    <View style={styles.activityIcon}>
+                      <Ionicons
+                        name="shield-checkmark-outline"
+                        size={15}
+                        color={COLORS.primary}
+                      />
+                    </View>
+                    <View style={styles.activityCopy}>
+                      <Text style={styles.activityTitle}>{item.title}</Text>
+                      <Text style={styles.activityBody}>{item.body}</Text>
+                    </View>
+                    <Text style={styles.activityTime}>{item.time}</Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No recent activity yet.</Text>
+              )}
+            </View>
+
+            <View style={styles.identityStrip}>
+              <View style={styles.identityPill}>
                 <Ionicons
-                  name="radio-outline"
-                  size={18}
+                  name="eye-off-outline"
+                  size={14}
                   color={COLORS.primary}
                 />
-                <ThemedText type="default" style={styles.statLabel}>
-                  Posts
-                </ThemedText>
-                <ThemedText type="title" style={styles.statValue}>
-                  {profile?.postCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.statCard}>
+                <Text style={styles.identityPillText}>
+                  Identity hidden in posts
+                </Text>
+              </View>
+              <View style={styles.identityPill}>
                 <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={18}
-                  color={COLORS.secondary}
+                  name="mail-outline"
+                  size={14}
+                  color={COLORS.primary}
                 />
-                <ThemedText type="default" style={styles.statLabel}>
-                  Comments
-                </ThemedText>
-                <ThemedText type="title" style={styles.statValue}>
-                  {profile?.commentCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-              <ThemedView style={styles.statCard}>
-                <Ionicons
-                  name="pulse-outline"
-                  size={18}
-                  color={COLORS.secondary}
-                />
-                <ThemedText type="default" style={styles.statLabel}>
-                  Signals
-                </ThemedText>
-                <ThemedText type="title" style={styles.statValue}>
-                  {profile?.voteCount ?? 0}
-                </ThemedText>
-              </ThemedView>
-            </ThemedView>
+                <Text style={styles.identityPillText}>{profileHandle}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
-            <TouchableOpacity
-              style={styles.disconnectBtn}
-              onPress={disconnectWallet}
-            >
-              <Ionicons
-                name="log-out-outline"
-                size={20}
-                color={COLORS.text}
-                style={{ marginRight: 8 }}
-              />
-              <ThemedText type="defaultSemiBold" style={styles.disconnectBtnText}>
-                Disconnect Wallet
-              </ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-        )}
-
-        {activeTab === "notifications" && (
-          <ThemedView style={styles.card}>
-            <ThemedView style={styles.notificationsHeader}>
-              <ThemedText type="title" style={styles.title}>
-                Alerts
-              </ThemedText>
+        {activeTab === "alerts" ? (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Alerts</Text>
               <TouchableOpacity onPress={markEverythingRead}>
-                <ThemedText type="link" style={styles.linkText}>
-                  Mark all read
-                </ThemedText>
+                <Text style={styles.sectionLink}>Mark all read</Text>
               </TouchableOpacity>
-            </ThemedView>
+            </View>
 
-            <ThemedView style={styles.notificationsSummary}>
-              <ThemedText type="defaultSemiBold" style={styles.notificationsHeadline}>
-                Alert center
-              </ThemedText>
-              <ThemedText type="default" style={styles.notificationsSummaryText}>
-                Fresh activity from your posts, replies, communities, and account signals appears here.
-              </ThemedText>
-            </ThemedView>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={16} color={COLORS.gray} />
+              <TextInput
+                value={notificationSearchQuery}
+                onChangeText={setNotificationSearchQuery}
+                placeholder="Search alerts"
+                placeholderTextColor={COLORS.gray}
+                style={styles.searchInput}
+              />
+            </View>
 
-            {notifications.length ? (
-              notifications.map((item) => (
+            {filteredNotifications.length ? (
+              filteredNotifications.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[
-                    styles.notificationCard,
-                    !item.isRead && styles.notificationUnread,
+                    styles.alertCard,
+                    !item.isRead && styles.alertCardUnread,
                   ]}
                   onPress={() => markSingleRead(item.id)}
                 >
-                  <ThemedView style={styles.notificationTopRow}>
-                    <ThemedText type="defaultSemiBold" style={styles.notificationTitle}>
-                      {item.title}
-                    </ThemedText>
-                    {!item.isRead && <ThemedView style={styles.unreadDot} />}
-                  </ThemedView>
-                  <ThemedText type="default" style={styles.notificationBody}>
-                    {item.body}
-                  </ThemedText>
-                  <ThemedText type="default" style={styles.notificationTime}>
+                  <Text style={styles.alertTitle}>{item.title}</Text>
+                  <Text style={styles.alertBody}>{item.body}</Text>
+                  <Text style={styles.alertTime}>
                     {formatDate(item.createdAt)}
-                  </ThemedText>
+                  </Text>
                 </TouchableOpacity>
               ))
             ) : (
-              <ThemedText type="default" style={styles.emptySubtitle}>
-                No notifications yet.
-              </ThemedText>
+              <Text style={styles.emptyText}>No alerts match that search.</Text>
             )}
-          </ThemedView>
-        )}
+          </View>
+        ) : null}
 
-        {activeTab === "settings" && settings && (
-          <ThemedView style={styles.card}>
-            <ThemedText type="title" style={styles.title}>
-              Settings
-            </ThemedText>
-            <ThemedText type="default" style={styles.settingsLead}>
-              Control alerts, visibility, and how your private account space behaves.
-            </ThemedText>
-            <ThemedView style={styles.settingsSummaryCard}>
-              <ThemedText type="defaultSemiBold" style={styles.settingsSummaryTitle}>
-                Quiet control layer
-              </ThemedText>
-              <ThemedText type="default" style={styles.settingsSummaryText}>
-                These controls keep the experience safer, calmer, and more deliberate as you become a repeat contributor.
-              </ThemedText>
-            </ThemedView>
-            <ThemedView style={styles.settingRow}>
-              <ThemedView style={styles.settingCopy}>
-                <ThemedText type="defaultSemiBold" style={styles.settingTitle}>
-                  Push notifications
-                </ThemedText>
-                <ThemedText type="default" style={styles.settingSubtitle}>
-                  Receive alerts for comments and votes.
-                </ThemedText>
-              </ThemedView>
+        {activeTab === "settings" ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.settingsGroup}>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("edit")}
+              >
+                <Text style={styles.settingsRowText}>Edit Profile</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.gray}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("privacy")}
+              >
+                <Text style={styles.settingsRowText}>Privacy & Safety</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.gray}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("alerts")}
+              >
+                <Text style={styles.settingsRowText}>Notifications</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.gray}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionTitle}>Preferences</Text>
+            <View style={styles.settingsGroup}>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("appearance")}
+              >
+                <Text style={styles.settingsRowText}>Appearance</Text>
+                <Text style={styles.settingsRowMeta}>
+                  {activeThemeOption.title}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("content")}
+              >
+                <Text style={styles.settingsRowText}>Content Preferences</Text>
+                <Text style={styles.settingsRowMeta}>
+                  {settings?.mutedKeywords?.length ?? 0} muted
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={resetOnboarding}
+              >
+                <Text style={styles.settingsRowText}>Reset Onboarding</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={COLORS.gray}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.sectionTitle}>Support</Text>
+            <View style={styles.settingsGroup}>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => setActiveTab("support")}
+              >
+                <Text style={styles.settingsRowText}>Help Center</Text>
+                <Text style={styles.settingsRowMeta}>Support</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsRow}
+                onPress={() => void openSupportComposer("report")}
+              >
+                <Text style={styles.settingsRowText}>Report a Problem</Text>
+                <Text style={styles.settingsRowMeta}>Email</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={disconnectWallet}
+            >
+              <Text style={styles.logoutButtonText}>Log Out</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {activeTab === "appearance" ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Appearance</Text>
+            <Text style={styles.sectionDescription}>
+              Keep the app dark, then choose how deep you want the surfaces to
+              feel.
+            </Text>
+
+            {THEME_OPTIONS.map((option) => {
+              const isActive = activeThemeOption.id === option.id;
+
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.optionCard,
+                    isActive && styles.optionCardActive,
+                  ]}
+                  onPress={() => void saveThemePreference(option.id)}
+                >
+                  <View style={styles.optionCopy}>
+                    <Text style={styles.optionTitle}>{option.title}</Text>
+                    <Text style={styles.optionDescription}>
+                      {option.description}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isActive ? "checkmark-circle" : "ellipse-outline"}
+                    size={20}
+                    color={isActive ? COLORS.primary : COLORS.gray}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {activeTab === "content" ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Content Preferences</Text>
+            <Text style={styles.sectionDescription}>
+              Mute keywords and hide sensitive posts without changing your
+              anonymous identity.
+            </Text>
+
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceCopy}>
+                <Text style={styles.preferenceTitle}>
+                  Sensitive content filter
+                </Text>
+                <Text style={styles.preferenceSubtitle}>
+                  Hide posts that may contain graphic or intense material.
+                </Text>
+              </View>
               <Switch
-                value={settings.pushEnabled}
-                onValueChange={(value) => saveSettings({ pushEnabled: value })}
-                trackColor={{
-                  false: COLORS.border,
-                  true: `${COLORS.primary}80`,
-                }}
-                thumbColor={settings.pushEnabled ? COLORS.primary : COLORS.gray}
-              />
-            </ThemedView>
-            <ThemedView style={styles.settingRow}>
-              <ThemedView style={styles.settingCopy}>
-                <ThemedText type="defaultSemiBold" style={styles.settingTitle}>
-                  Email updates
-                </ThemedText>
-                <ThemedText type="default" style={styles.settingSubtitle}>
-                  Keep email off unless you add it later.
-                </ThemedText>
-              </ThemedView>
-              <Switch
-                value={settings.emailEnabled}
-                onValueChange={(value) => saveSettings({ emailEnabled: value })}
-                trackColor={{
-                  false: COLORS.border,
-                  true: `${COLORS.primary}80`,
-                }}
-                thumbColor={
-                  settings.emailEnabled ? COLORS.primary : COLORS.gray
-                }
-              />
-            </ThemedView>
-            <ThemedView style={styles.settingRow}>
-              <ThemedView style={styles.settingCopy}>
-                <ThemedText type="defaultSemiBold" style={styles.settingTitle}>
-                  Marketing updates
-                </ThemedText>
-                <ThemedText type="default" style={styles.settingSubtitle}>
-                  Product tips and event announcements.
-                </ThemedText>
-              </ThemedView>
-              <Switch
-                value={settings.marketingEnabled}
+                value={privacyPrefs.safeMode}
                 onValueChange={(value) =>
-                  saveSettings({ marketingEnabled: value })
+                  void updatePrivacyPref("safeMode", value)
                 }
-                trackColor={{
-                  false: COLORS.border,
-                  true: `${COLORS.primary}80`,
-                }}
-                thumbColor={
-                  settings.marketingEnabled ? COLORS.primary : COLORS.gray
-                }
+                trackColor={{ false: "#2B2B32", true: "rgba(139,61,255,0.50)" }}
+                thumbColor={privacyPrefs.safeMode ? COLORS.primary : "#D9D9E6"}
               />
-            </ThemedView>
-            <ThemedView style={styles.settingRow}>
-              <ThemedView style={styles.settingCopy}>
-                <ThemedText type="defaultSemiBold" style={styles.settingTitle}>
-                  Show wallet summary
-                </ThemedText>
-                <ThemedText type="default" style={styles.settingSubtitle}>
-                  Keep account totals visible in the app.
-                </ThemedText>
-              </ThemedView>
-              <Switch
-                value={settings.showWalletSummary}
-                onValueChange={(value) =>
-                  saveSettings({ showWalletSummary: value })
-                }
-                trackColor={{
-                  false: COLORS.border,
-                  true: `${COLORS.primary}80`,
-                }}
-                thumbColor={
-                  settings.showWalletSummary ? COLORS.primary : COLORS.gray
-                }
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Muted keywords</Text>
+              <TextInput
+                value={mutedKeywordDraft}
+                onChangeText={setMutedKeywordDraft}
+                placeholder="spoilers, fights, politics"
+                placeholderTextColor={COLORS.gray}
+                style={[styles.profileInput, styles.profileInputMultiline]}
+                multiline
               />
-            </ThemedView>
-          </ThemedView>
-        )}
+              <Text style={styles.helperText}>
+                Separate words or phrases with commas. Matching posts can be
+                filtered out more easily.
+              </Text>
+            </View>
+
+            {mutedKeywords.length ? (
+              <View style={styles.keywordWrap}>
+                {mutedKeywords.map((item) => (
+                  <View key={item} style={styles.keywordPill}>
+                    <Text style={styles.keywordPillText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.secondaryCta, styles.actionButton]}
+                onPress={() => void saveMutedKeywords("")}
+              >
+                <Text style={styles.secondaryCtaText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryCta, styles.actionButton]}
+                onPress={() => void saveMutedKeywords()}
+              >
+                <Text style={styles.primaryCtaText}>Save Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
+        {activeTab === "support" ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Support</Text>
+            <Text style={styles.sectionDescription}>
+              Open your mail app with the right subject line already filled in,
+              or share feedback directly.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => void openSupportComposer("help")}
+            >
+              <View style={styles.optionCopy}>
+                <Text style={styles.optionTitle}>Email Help</Text>
+                <Text style={styles.optionDescription}>
+                  Ask about your account, profile, alerts, or privacy controls.
+                </Text>
+              </View>
+              <Ionicons name="mail-outline" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => void openSupportComposer("report")}
+            >
+              <View style={styles.optionCopy}>
+                <Text style={styles.optionTitle}>Report a Problem</Text>
+                <Text style={styles.optionDescription}>
+                  Send a bug report draft with your account context already
+                  included.
+                </Text>
+              </View>
+              <Ionicons name="bug-outline" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionCard}
+              onPress={() => void shareFeedback()}
+            >
+              <View style={styles.optionCopy}>
+                <Text style={styles.optionTitle}>Share Feedback</Text>
+                <Text style={styles.optionDescription}>
+                  Tell us what should improve next in the app experience.
+                </Text>
+              </View>
+              <Ionicons
+                name="chatbox-ellipses-outline"
+                size={20}
+                color={COLORS.primary}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {activeTab === "privacy" ? (
+          <View style={styles.sectionCard}>
+            {[
+              {
+                key: "hideOnlineStatus",
+                title: "Hide Online Status",
+                subtitle: "Others won't see when you're active.",
+              },
+              {
+                key: "allowComments",
+                title: "Allow Comments",
+                subtitle: "Allow others to comment on your posts.",
+              },
+              {
+                key: "allowDirectMessages",
+                title: "Allow Direct Messages",
+                subtitle: "Receive messages from other users.",
+              },
+              {
+                key: "showPostsInFeed",
+                title: "Show My Posts in Feed",
+                subtitle: "Your posts may appear in public feeds.",
+              },
+              {
+                key: "safeMode",
+                title: "Safe Mode",
+                subtitle: "Hide potentially sensitive content.",
+              },
+            ].map((item) => (
+              <View key={item.key} style={styles.privacyRow}>
+                <View style={styles.privacyCopy}>
+                  <Text style={styles.privacyTitle}>{item.title}</Text>
+                  <Text style={styles.privacySubtitle}>{item.subtitle}</Text>
+                </View>
+                <Switch
+                  value={privacyPrefs[item.key as keyof typeof privacyPrefs]}
+                  onValueChange={(value) =>
+                    void updatePrivacyPref(
+                      item.key as keyof typeof privacyPrefs,
+                      value,
+                    )
+                  }
+                  trackColor={{
+                    false: "#2B2B32",
+                    true: "rgba(139,61,255,0.50)",
+                  }}
+                  thumbColor={
+                    privacyPrefs[item.key as keyof typeof privacyPrefs]
+                      ? COLORS.primary
+                      : "#D9D9E6"
+                  }
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {activeTab === "edit" ? (
+          <View style={styles.sectionCard}>
+            <View style={styles.editAvatarBlock}>
+              <View
+                style={[
+                  styles.profileAvatar,
+                  {
+                    backgroundColor: profileAccentSurface,
+                    borderColor: profileAccentBorder,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="shield-half-outline"
+                  size={48}
+                  color={COLORS.accent}
+                />
+              </View>
+              <Text style={styles.editSubtitle}>
+                Anonymous is your identity. You can change your display name
+                anytime.
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Display Name</Text>
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="User_4821"
+                placeholderTextColor={COLORS.gray}
+                style={styles.profileInput}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputGroupLabel}>Status</Text>
+              <TextInput
+                value={editBio}
+                onChangeText={setEditBio}
+                placeholder="Sharing thoughts, not identity."
+                placeholderTextColor={COLORS.gray}
+                style={[styles.profileInput, styles.profileInputMultiline]}
+                multiline
+              />
+            </View>
+
+            <View style={styles.colorRow}>
+              {PROFILE_ACCENT_OPTIONS.map((color) => {
+                const selected = profileAccent === color;
+
+                return (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorDotButton,
+                      selected && {
+                        borderColor: color,
+                        backgroundColor: hexToRgba(color, 0.14),
+                      },
+                    ]}
+                    onPress={() => setProfileAccent(color)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.colorDot, { backgroundColor: color }]}>
+                      {selected ? (
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.primaryCta,
+                savingProfile && styles.primaryCtaDisabled,
+              ]}
+              onPress={() => void saveProfileDraft()}
+              disabled={savingProfile}
+            >
+              <Text style={styles.primaryCtaText}>
+                {savingProfile ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
     </ScreenSurface>
   );
@@ -653,345 +1211,416 @@ const WalletScreen = () => {
 
 const styles = StyleSheet.create({
   surface: { flex: 1, padding: 16 },
-  tabRow: {
-    flexDirection: "row",
-    gap: 10,
+  surfaceCompact: { paddingHorizontal: 14 },
+  content: {
+    flexGrow: 1,
+    paddingTop: 24,
+    paddingBottom: 140,
+  },
+  headerCard: {
+    backgroundColor: "#08080C",
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    padding: 18,
     marginBottom: 16,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 20,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  tabBtn: {
-    flex: 1,
-    backgroundColor: "transparent",
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  tabBtnActive: {
-    backgroundColor: `${COLORS.primary}18`,
-  },
-  tabText: { color: COLORS.gray, ...TYPOGRAPHY.label },
-  tabTextActive: { color: COLORS.text },
-  statusBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 12,
-    gap: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  statusText: { color: COLORS.text, flex: 1, ...TYPOGRAPHY.label },
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.4,
-    shadowRadius: 28,
-    elevation: 14,
-    marginBottom: 18,
-  },
-  healthBanner: {
+  headerCardCompact: { padding: 14 },
+  headerTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
-    marginBottom: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
-  healthLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  healthValue: { color: COLORS.text, ...TYPOGRAPHY.section, marginTop: 2 },
-  healthPill: {
+  headerTopRowCompact: { alignItems: "flex-start" },
+  headerLead: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}35`,
-    backgroundColor: `${COLORS.primary}12`,
+    gap: 12,
+    flex: 1,
   },
-  healthPillText: { color: COLORS.text, ...TYPOGRAPHY.meta },
-  iconWrap: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 24,
-    padding: 18,
+  headerActions: { flexDirection: "row", gap: 10 },
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#101015",
     borderWidth: 1,
-    borderColor: `${COLORS.primary}25`,
+    borderColor: "rgba(139,61,255,0.20)",
   },
-  accountHeader: {
+  headerTitle: { color: COLORS.text, ...TYPOGRAPHY.heading },
+  headerSubtitle: { color: COLORS.gray, ...TYPOGRAPHY.label, marginTop: 3 },
+  statusBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#0C0C10",
+    padding: 12,
     marginBottom: 14,
   },
-  accountCopy: { flex: 1 },
-  title: {
+  statusText: { color: COLORS.text, ...TYPOGRAPHY.label, flex: 1 },
+  profileHeroCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#09090C",
+    padding: 18,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  profileAvatarShell: {
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  profileAvatar: {
+    width: 122,
+    height: 122,
+    borderRadius: 61,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(125,60,255,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(139,61,255,0.32)",
+  },
+  editAvatarButton: {
+    position: "absolute",
+    right: 0,
+    bottom: 4,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  profileName: {
     color: COLORS.text,
-    ...TYPOGRAPHY.title,
+    ...TYPOGRAPHY.heading,
     marginBottom: 4,
   },
-  address: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.label,
-    letterSpacing: 1,
+  profileStatus: {
+    color: COLORS.primary,
+    ...TYPOGRAPHY.meta,
+    marginBottom: 8,
   },
-  caption: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginTop: 2 },
-  addressCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
+  profileBio: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.body,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
     marginBottom: 14,
   },
-  addressCardLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginBottom: 6 },
-  addressCardValue: { color: COLORS.text, ...TYPOGRAPHY.label },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#111117",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  statValue: { color: COLORS.text, ...TYPOGRAPHY.section },
+  statLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginTop: 4 },
+  quickActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  quickActionCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#111117",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    gap: 8,
+  },
+  quickActionText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  sectionCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#09090C",
+    padding: 16,
+    marginBottom: 14,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionTitle: { color: COLORS.text, ...TYPOGRAPHY.title, marginBottom: 10 },
+  sectionLink: { color: COLORS.primary, ...TYPOGRAPHY.meta },
+  activityRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+  },
+  activityIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(139,61,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityCopy: { flex: 1 },
+  activityTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 2 },
+  activityBody: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  activityTime: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    maxWidth: 88,
+    textAlign: "right",
+  },
+  emptyText: { color: COLORS.gray, ...TYPOGRAPHY.label, marginTop: 10 },
   identityStrip: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginBottom: 18,
   },
   identityPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    gap: 8,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#0E0E12",
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingVertical: 9,
   },
-  identityText: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.meta,
-  },
-  accountSummaryRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 18,
-  },
-  accountSummaryCard: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    gap: 4,
-  },
-  accountSummaryLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  accountSummaryValue: { color: COLORS.text, ...TYPOGRAPHY.section },
-  buyerSignalCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    marginBottom: 18,
-  },
-  reputationCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    marginBottom: 18,
-  },
-  reputationHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 12,
-  },
-  reputationTitle: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.label,
-    marginBottom: 4,
-  },
-  reputationSubtitle: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.meta,
-  },
-  reputationBadge: {
+  identityPillText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}35`,
-    backgroundColor: `${COLORS.primary}12`,
-  },
-  reputationBadgeText: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.meta,
-  },
-  reputationStats: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  reputationStat: {
-    flex: 1,
+    gap: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    padding: 12,
-  },
-  reputationStatLabel: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.meta,
-    marginBottom: 4,
-  },
-  reputationStatValue: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.section,
-  },
-  buyerSignalTitle: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.label,
-    marginBottom: 4,
-  },
-  buyerSignalText: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  statsRow: { flexDirection: "row", gap: 12, marginBottom: 20, width: "100%" },
-  statCard: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  statLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  statValue: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.title,
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  disconnectBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.primary,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  disconnectBtnText: { color: COLORS.text, ...TYPOGRAPHY.button },
-  notificationsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  notificationsSummary: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#111117",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     marginBottom: 14,
   },
-  notificationsHeadline: {
+  searchInput: {
+    flex: 1,
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+    paddingVertical: 0,
+  },
+  alertCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#111117",
+    padding: 14,
+    marginBottom: 10,
+  },
+  alertCardUnread: {
+    borderColor: "rgba(139,61,255,0.26)",
+    backgroundColor: "rgba(139,61,255,0.08)",
+  },
+  alertTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 6 },
+  alertBody: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginBottom: 8 },
+  alertTime: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  settingsGroup: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#101015",
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  settingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.04)",
+  },
+  settingsRowText: { color: COLORS.text, ...TYPOGRAPHY.label },
+  settingsRowMeta: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  sectionDescription: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.label,
+    marginBottom: 14,
+  },
+  optionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#101015",
+    padding: 14,
+    marginBottom: 12,
+  },
+  optionCardActive: {
+    borderColor: "rgba(139,61,255,0.35)",
+    backgroundColor: "rgba(139,61,255,0.10)",
+  },
+  optionCopy: { flex: 1 },
+  optionTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.label,
     marginBottom: 4,
   },
-  notificationsSummaryText: {
+  optionDescription: {
     color: COLORS.gray,
     ...TYPOGRAPHY.meta,
   },
-  linkText: { color: COLORS.primary, ...TYPOGRAPHY.label },
-  notificationCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  notificationUnread: {
-    borderColor: COLORS.primary,
-  },
-  notificationTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  logoutButton: {
+    borderRadius: 16,
+    backgroundColor: "rgba(70,17,33,0.78)",
     alignItems: "center",
-    marginBottom: 6,
+    justifyContent: "center",
+    paddingVertical: 15,
+    marginTop: 6,
   },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.primary,
-  },
-  notificationTitle: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.label,
-    flex: 1,
-    marginRight: 10,
-  },
-  notificationBody: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.label,
-    fontWeight: "500",
-  },
-  notificationTime: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginTop: 8 },
-  settingRow: {
+  logoutButtonText: { color: "#FF7A8A", ...TYPOGRAPHY.button },
+  privacyRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
-  settingsLead: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.label,
-    marginBottom: 12,
-  },
-  settingsSummaryCard: {
+  privacyCopy: { flex: 1 },
+  privacyTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 3 },
+  privacySubtitle: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  preferenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    marginBottom: 6,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#101015",
   },
-  settingsSummaryTitle: {
+  preferenceCopy: { flex: 1 },
+  preferenceTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 4 },
+  preferenceSubtitle: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  editAvatarBlock: { alignItems: "center", marginBottom: 18 },
+  editSubtitle: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.label,
+    textAlign: "center",
+    marginTop: 12,
+  },
+  inputGroup: { marginBottom: 14 },
+  inputGroupLabel: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginBottom: 8 },
+  colorRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+  colorDotButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "#101015",
+  },
+  colorDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileInput: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#111117",
     color: COLORS.text,
     ...TYPOGRAPHY.label,
-    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  settingsSummaryText: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  settingCopy: { flex: 1, marginRight: 16 },
-  settingTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 4 },
-  settingSubtitle: { color: COLORS.gray, ...TYPOGRAPHY.meta },
-  emptySubtitle: { color: COLORS.gray, ...TYPOGRAPHY.label },
+  profileInputMultiline: {
+    minHeight: 96,
+    textAlignVertical: "top",
+  },
+  helperText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    marginTop: 8,
+  },
+  keywordWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  keywordPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#111117",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  keywordPillText: { color: COLORS.text, ...TYPOGRAPHY.meta },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  actionButton: { flex: 1 },
+  secondaryCta: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "#101015",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+  },
+  secondaryCtaText: { color: COLORS.text, ...TYPOGRAPHY.button },
+  primaryCta: {
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+  },
+  primaryCtaDisabled: {
+    opacity: 0.72,
+  },
+  primaryCtaText: { color: COLORS.text, ...TYPOGRAPHY.button },
 });
 
 export default WalletScreen;

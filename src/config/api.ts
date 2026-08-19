@@ -2,20 +2,34 @@ import Constants from "expo-constants";
 
 const DEFAULT_PORT = 4000;
 const API_PREFIX = "/api/v1";
-const DEFAULT_PRODUCTION_API_BASE_URL =
-  "https://annanymous.onrender.com/api/v1";
+const LEGACY_PRODUCTION_API_BASE_URL = "https://annanymous.onrender.com/api/v1";
+
+const sanitizeBaseUrl = (value?: string | null) => {
+  const trimmed = value?.trim();
+
+  return trimmed ? trimmed.replace(/\/$/, "") : null;
+};
 
 const inferHost = () => {
-  const explicitBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const explicitBaseUrl = sanitizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
   if (explicitBaseUrl) {
-    return explicitBaseUrl.replace(/\/$/, "");
+    return explicitBaseUrl;
+  }
+
+  const extraBaseUrl = sanitizeBaseUrl(
+    typeof Constants.expoConfig?.extra?.apiBaseUrl === "string"
+      ? Constants.expoConfig.extra.apiBaseUrl
+      : null,
+  );
+  if (extraBaseUrl) {
+    return extraBaseUrl;
   }
 
   const hostUri = Constants.expoConfig?.hostUri ?? Constants.linkingUri;
   if (!hostUri) {
     return __DEV__
       ? `http://localhost:${DEFAULT_PORT}`
-      : DEFAULT_PRODUCTION_API_BASE_URL;
+      : LEGACY_PRODUCTION_API_BASE_URL;
   }
 
   const sanitizedHost = hostUri
@@ -24,7 +38,7 @@ const inferHost = () => {
     .split(":")[0];
 
   if (!__DEV__) {
-    return DEFAULT_PRODUCTION_API_BASE_URL;
+    return LEGACY_PRODUCTION_API_BASE_URL;
   }
 
   return `http://${sanitizedHost}:${DEFAULT_PORT}`;
@@ -39,3 +53,6 @@ export const API_ORIGIN = resolvedBase.endsWith(API_PREFIX)
 export const API_BASE_URL = resolvedBase.endsWith(API_PREFIX)
   ? resolvedBase
   : `${resolvedBase}${API_PREFIX}`;
+
+export const IS_LEGACY_PRODUCTION_API =
+  !__DEV__ && API_BASE_URL === LEGACY_PRODUCTION_API_BASE_URL;

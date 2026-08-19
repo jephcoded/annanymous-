@@ -29,6 +29,18 @@ exports.voteOnPost = async (req, res, next) => {
   }
 };
 
+exports.removePostVote = async (req, res, next) => {
+  try {
+    const result = await Vote.removeFromPost({
+      postId: req.params.postId,
+      userId: req.user?.id,
+    });
+    res.json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.voteOnPoll = async (req, res, next) => {
   try {
     const result = await Vote.applyToPoll({

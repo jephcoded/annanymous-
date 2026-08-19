@@ -6,7 +6,8 @@ const isRender = Boolean(process.env.RENDER || process.env.PORT);
 const host = process.env.ADMIN_WEB_HOST || (isRender ? "0.0.0.0" : "127.0.0.1");
 const port = Number(process.env.PORT || process.env.ADMIN_WEB_PORT || 62208);
 const rootDir = path.resolve(__dirname, "..", "admin-web");
-const defaultProxyBase = process.env.ADMIN_API_PROXY_BASE || "https://annanymous-o8qp.onrender.com";
+const defaultProxyBase =
+  process.env.ADMIN_API_PROXY_BASE || "https://annanymous-o8qp.onrender.com";
 const apiProxyBase = defaultProxyBase.replace(/\/$/, "");
 
 const contentTypes = {
@@ -36,12 +37,17 @@ const readRequestBody = (request) =>
     const chunks = [];
 
     request.on("data", (chunk) => chunks.push(chunk));
-    request.on("end", () => resolve(chunks.length ? Buffer.concat(chunks) : undefined));
+    request.on("end", () =>
+      resolve(chunks.length ? Buffer.concat(chunks) : undefined),
+    );
     request.on("error", reject);
   });
 
 const proxyApiRequest = async (request, response, requestUrl) => {
-  const upstreamUrl = new URL(requestUrl.pathname + requestUrl.search, `${apiProxyBase}/`);
+  const upstreamUrl = new URL(
+    requestUrl.pathname + requestUrl.search,
+    `${apiProxyBase}/`,
+  );
 
   try {
     const body = await readRequestBody(request);
@@ -59,7 +65,15 @@ const proxyApiRequest = async (request, response, requestUrl) => {
 
     const upstreamHeaders = {};
     upstreamResponse.headers.forEach((value, key) => {
-      if (["connection", "content-encoding", "content-length", "keep-alive", "transfer-encoding"].includes(key.toLowerCase())) {
+      if (
+        [
+          "connection",
+          "content-encoding",
+          "content-length",
+          "keep-alive",
+          "transfer-encoding",
+        ].includes(key.toLowerCase())
+      ) {
         return;
       }
 
@@ -75,7 +89,8 @@ const proxyApiRequest = async (request, response, requestUrl) => {
       JSON.stringify({
         error: {
           code: "ADMIN_PROXY_FAILED",
-          message: error instanceof Error ? error.message : "Proxy request failed",
+          message:
+            error instanceof Error ? error.message : "Proxy request failed",
           status: 502,
         },
       }),
@@ -85,14 +100,19 @@ const proxyApiRequest = async (request, response, requestUrl) => {
 };
 
 const server = http.createServer((request, response) => {
-  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
+  const requestUrl = new URL(
+    request.url || "/",
+    `http://${request.headers.host || `${host}:${port}`}`,
+  );
   const requestedPath = decodeURIComponent(requestUrl.pathname || "/");
 
   if (request.method === "OPTIONS" && requestedPath.startsWith("/api/")) {
     send(response, 204, "", {
       "Access-Control-Allow-Origin": request.headers.origin || "*",
       "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": request.headers["access-control-request-headers"] || "Content-Type, Authorization",
+      "Access-Control-Allow-Headers":
+        request.headers["access-control-request-headers"] ||
+        "Content-Type, Authorization",
     });
     return;
   }
@@ -106,7 +126,9 @@ const server = http.createServer((request, response) => {
   let filePath = path.normalize(path.join(rootDir, relativePath));
 
   if (!filePath.startsWith(rootDir)) {
-    send(response, 403, "Forbidden", { "Content-Type": "text/plain; charset=utf-8" });
+    send(response, 403, "Forbidden", {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
     return;
   }
 
@@ -119,7 +141,9 @@ const server = http.createServer((request, response) => {
           if (!path.extname(relativePath)) {
             fs.readFile(fallbackPath, (fallbackError, fallbackBuffer) => {
               if (fallbackError) {
-                send(response, 500, "Internal server error", { "Content-Type": "text/plain; charset=utf-8" });
+                send(response, 500, "Internal server error", {
+                  "Content-Type": "text/plain; charset=utf-8",
+                });
                 return;
               }
 
@@ -130,11 +154,15 @@ const server = http.createServer((request, response) => {
             return;
           }
 
-          send(response, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" });
+          send(response, 404, "Not found", {
+            "Content-Type": "text/plain; charset=utf-8",
+          });
           return;
         }
 
-        send(response, 500, "Internal server error", { "Content-Type": "text/plain; charset=utf-8" });
+        send(response, 500, "Internal server error", {
+          "Content-Type": "text/plain; charset=utf-8",
+        });
         return;
       }
 

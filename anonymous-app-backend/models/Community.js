@@ -7,24 +7,43 @@ exports.listForUser = async (userId) => {
        c.id,
        c.name,
        c.description,
+       c.is_private AS "isPrivate",
        c.invite_code AS "inviteCode",
        c.created_at AS "createdAt",
        COALESCE(cm_self.is_admin, false) AS "isAdmin",
-       COALESCE(cm_self.status, 'active') AS status,
+       cm_self.status AS status,
        COUNT(cm_active.id)::int AS "memberCount"
      FROM communities c
-     INNER JOIN community_members cm_self
+     LEFT JOIN community_members cm_self
        ON cm_self.community_id = c.id
       AND cm_self.user_id = $1
      LEFT JOIN community_members cm_active
        ON cm_active.community_id = c.id
       AND cm_active.status = 'active'
      GROUP BY c.id, cm_self.is_admin, cm_self.status
-     ORDER BY c.created_at DESC`,
+     ORDER BY COUNT(cm_active.id) DESC, c.created_at DESC`,
     [userId],
   );
 
   return result.rows;
+};
+
+exports.getById = async (communityId) => {
+  const result = await db.query(
+    `SELECT
+       id,
+       name,
+       description,
+       is_private AS "isPrivate",
+       invite_code AS "inviteCode",
+       created_at AS "createdAt"
+     FROM communities
+     WHERE id = $1
+     LIMIT 1`,
+    [communityId],
+  );
+
+  return result.rows[0] || null;
 };
 
 exports.createCommunity = async ({
@@ -68,6 +87,24 @@ exports.addMember = async ({
     [communityId, userId, isAdmin, status],
   );
   return result.rows[0];
+};
+
+exports.updateMembership = async (membershipId, updates) => {
+  const result = await db.query(
+    `UPDATE community_members
+     SET
+       status = COALESCE($2, status),
+       is_admin = COALESCE($3, is_admin)
+     WHERE id = $1
+     RETURNING *`,
+    [
+      membershipId,
+      updates.status ?? null,
+      typeof updates.isAdmin === "boolean" ? updates.isAdmin : null,
+    ],
+  );
+
+  return result.rows[0] || null;
 };
 
 exports.createInvite = async ({

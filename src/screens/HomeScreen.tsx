@@ -1,37 +1,43 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenSurface from "../components/ScreenSurface";
 import { useWallet } from "../contexts/WalletContext";
 import {
-  CommentItem,
-  createComment,
-  deletePost,
-  FeedPost,
-  getCommentsByPost,
-  getFeed,
-  getMe,
-  removePostVote,
-  voteOnPost,
+    CommentItem,
+    createComment,
+    deletePost,
+    FeedPost,
+    getCommentsByPost,
+    getFeed,
+    getMe,
+    removePostVote,
+    voteOnPost,
 } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
 import { TYPOGRAPHY } from "../theme";
@@ -318,35 +324,35 @@ const HomeScreen = () => {
     }
   }, []);
 
-  const loadInlineComments = useCallback(async (
-    postId: number,
-    options?: { showLoader?: boolean },
-  ) => {
-    if (options?.showLoader !== false) {
-      setCommentsLoading(true);
-    }
+  const loadInlineComments = useCallback(
+    async (postId: number, options?: { showLoader?: boolean }) => {
+      if (options?.showLoader !== false) {
+        setCommentsLoading(true);
+      }
 
-    try {
-      const response = await getCommentsByPost(postId);
-      commentsCacheRef.current[postId] = response.data;
+      try {
+        const response = await getCommentsByPost(postId);
+        commentsCacheRef.current[postId] = response.data;
 
-      if (activeCommentPostIdRef.current === postId) {
-        setSheetComments(response.data);
-        setLoadError(null);
+        if (activeCommentPostIdRef.current === postId) {
+          setSheetComments(response.data);
+          setLoadError(null);
+        }
+      } catch (error) {
+        if (activeCommentPostIdRef.current === postId) {
+          setLoadError(
+            getFriendlyErrorMessage(error, "Unable to load comments."),
+          );
+          setSheetComments([]);
+        }
+      } finally {
+        if (activeCommentPostIdRef.current === postId) {
+          setCommentsLoading(false);
+        }
       }
-    } catch (error) {
-      if (activeCommentPostIdRef.current === postId) {
-        setLoadError(
-          getFriendlyErrorMessage(error, "Unable to load comments."),
-        );
-        setSheetComments([]);
-      }
-    } finally {
-      if (activeCommentPostIdRef.current === postId) {
-        setCommentsLoading(false);
-      }
-    }
-  }, []);
+    },
+    [],
+  );
 
   const openCommentsSheet = useCallback(
     (post: FeedPost) => {
@@ -696,20 +702,24 @@ const HomeScreen = () => {
 
               <View style={styles.actionRow}>
                 <TouchableOpacity
-                  style={styles.metricButton}
+                  style={[
+                    styles.metricButton,
+                    isLiked && styles.metricButtonActive,
+                  ]}
                   onPress={() => void toggleLike(item.id)}
                   disabled={isLiking}
                 >
                   <Ionicons
                     name={isLiked ? "heart" : "heart-outline"}
                     size={16}
-                    color={HOME_COLORS.purple}
+                    color={isLiked ? HOME_COLORS.purple : HOME_COLORS.muted}
                   />
                   <Text
                     style={[
                       styles.metricText,
-                      styles.metricTextPurple,
-                      isLiked && styles.metricTextActive,
+                      isLiked
+                        ? styles.metricTextActive
+                        : styles.metricTextMuted,
                     ]}
                   >
                     {likeCount}
@@ -1267,6 +1277,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  metricButtonActive: {
+    backgroundColor: HOME_COLORS.purpleSoft,
   },
   metricText: {
     color: HOME_COLORS.text,
@@ -1274,6 +1290,9 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: "600",
     fontFamily: TYPOGRAPHY.meta.fontFamily,
+  },
+  metricTextMuted: {
+    color: HOME_COLORS.muted,
   },
   metricTextPurple: {
     color: HOME_COLORS.purple,

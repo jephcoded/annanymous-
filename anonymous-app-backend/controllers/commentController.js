@@ -1,6 +1,7 @@
 const Comment = require("../models/Comment");
 const notificationService = require("../services/notificationService");
 const Post = require("../models/Post");
+const pushService = require("../services/pushService");
 
 exports.listRecent = async (req, res, next) => {
   try {
@@ -44,6 +45,22 @@ exports.create = async (req, res, next) => {
         body: "Someone commented on one of your posts.",
         meta: { postId: req.params.postId, commentId: comment.id },
       });
+
+      void pushService
+        .pushToUsers({
+          recipientUserIds: [post.userId],
+          excludeUserId: req.user?.id || null,
+          title: "New anonymous reply",
+          body: comment.message || "Someone commented on your post.",
+          meta: {
+            postId: Number(req.params.postId),
+            commentId: comment.id,
+            type: "comment",
+          },
+        })
+        .catch((pushError) => {
+          console.error("Push fanout failed for new comment", pushError);
+        });
     }
 
     res.status(201).json({ data: comment });

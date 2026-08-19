@@ -25,7 +25,7 @@ import {
     deletePost,
     getCommentsByPost,
     getFeed,
-  getMe,
+    getMe,
     getRecentComments,
 } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
