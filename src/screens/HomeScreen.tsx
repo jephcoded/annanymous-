@@ -25,6 +25,7 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
+import Animatable from "react-native-animatable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenSurface from "../components/ScreenSurface";
@@ -78,6 +79,26 @@ const formatRelativeTime = (timestamp: string) => {
   if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h`;
   return `${Math.floor(diffMinutes / 1440)}d`;
 };
+
+const AVATAR_PALETTE = [
+  "#8B3DFF",
+  "#FF6B9D",
+  "#35C7E3",
+  "#FFB03B",
+  "#4ADE80",
+  "#F87171",
+];
+
+const getAvatarColor = (seed: string) => {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) % 997;
+  }
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+};
+
+const getInitial = (name?: string | null) =>
+  (name?.trim()?.[0] || "?").toUpperCase();
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
@@ -933,37 +954,65 @@ const HomeScreen = () => {
                 ]}
                 ListEmptyComponent={
                   commentsLoading ? (
-                    <Text style={styles.commentEmptyText}>
-                      Loading comments...
-                    </Text>
+                    <View style={styles.commentEmptyState}>
+                      <ActivityIndicator size="small" color={HOME_COLORS.purple} />
+                      <Text style={styles.commentEmptyText}>
+                        Loading comments...
+                      </Text>
+                    </View>
                   ) : (
-                    <Text style={styles.commentEmptyText}>
-                      No comments yet. Start the thread.
-                    </Text>
-                  )
-                }
-                renderItem={({ item }) => (
-                  <View style={styles.commentRow}>
-                    <View style={styles.commentAvatar}>
+                    <View style={styles.commentEmptyState}>
                       <Ionicons
                         name="chatbubble-ellipses-outline"
-                        size={14}
+                        size={26}
                         color={HOME_COLORS.purple}
                       />
+                      <Text style={styles.commentEmptyText}>
+                        No comments yet. Start the thread.
+                      </Text>
                     </View>
-                    <View style={styles.commentBodyWrap}>
-                      <Text style={styles.commentBodyText}>
-                        <Text style={styles.commentAuthor}>
-                          {item.authorName?.trim() || "u.comment"}{" "}
+                  )
+                }
+                renderItem={({ item, index }) => {
+                  const authorLabel = item.authorName?.trim() || "u.comment";
+                  const avatarColor = getAvatarColor(authorLabel);
+                  return (
+                    <Animatable.View
+                      animation="fadeInUp"
+                      duration={280}
+                      delay={Math.min(index * 40, 200)}
+                      useNativeDriver
+                      style={styles.commentRow}
+                    >
+                      <View
+                        style={[
+                          styles.commentAvatar,
+                          {
+                            backgroundColor: `${avatarColor}22`,
+                            borderColor: `${avatarColor}44`,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.commentAvatarText, { color: avatarColor }]}
+                        >
+                          {getInitial(authorLabel)}
                         </Text>
-                        {item.message}
-                      </Text>
-                      <Text style={styles.commentMeta}>
-                        {formatRelativeTime(item.createdAt)}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                      </View>
+                      <View style={styles.commentBodyWrap}>
+                        <Text style={styles.commentBodyText}>
+                          <Text style={styles.commentAuthor}>
+                            {authorLabel}{" "}
+                          </Text>
+                          {item.message}
+                        </Text>
+                        <Text style={styles.commentMeta}>
+                          {formatRelativeTime(item.createdAt)} ago
+                        </Text>
+                      </View>
+                    </Animatable.View>
+                  );
+                }}
               />
 
               <View
@@ -982,13 +1031,19 @@ const HomeScreen = () => {
                   maxLength={COMMENT_LIMIT}
                 />
                 <TouchableOpacity
-                  style={styles.commentSendButton}
+                  style={[
+                    styles.commentSendButton,
+                    (commentSubmitting || !commentDraft.trim()) &&
+                      styles.commentSendButtonDisabled,
+                  ]}
                   onPress={() => void submitComment()}
                   disabled={commentSubmitting || !commentDraft.trim()}
                 >
-                  <Text style={styles.commentSendText}>
-                    {commentSubmitting ? "Posting" : "Post"}
-                  </Text>
+                  {commentSubmitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="send" size={17} color="#FFFFFF" />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1498,6 +1553,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(139,61,255,0.16)",
   },
+  commentAvatarText: {
+    ...TYPOGRAPHY.label,
+    fontSize: 13,
+  },
   commentBodyWrap: {
     flex: 1,
     gap: 4,
@@ -1517,11 +1576,15 @@ const styles = StyleSheet.create({
     color: "#A58FD0",
     ...TYPOGRAPHY.meta,
   },
+  commentEmptyState: {
+    alignItems: "center",
+    gap: 10,
+    marginTop: 32,
+  },
   commentEmptyText: {
     color: HOME_COLORS.muted,
     ...TYPOGRAPHY.label,
     textAlign: "center",
-    marginTop: 24,
   },
   commentComposer: {
     flexDirection: "row",
@@ -1549,18 +1612,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   commentSendButton: {
-    minWidth: 74,
+    width: 46,
     height: 46,
-    borderRadius: 18,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: HOME_COLORS.purple,
-    borderWidth: 1,
-    borderColor: HOME_COLORS.purple,
+    shadowColor: HOME_COLORS.purple,
+    shadowOpacity: 0.34,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
-  commentSendText: {
-    color: "#F7F2FF",
-    ...TYPOGRAPHY.label,
+  commentSendButtonDisabled: {
+    opacity: 0.4,
+    shadowOpacity: 0,
   },
   previewBackdrop: {
     flex: 1,
