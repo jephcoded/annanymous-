@@ -4,6 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     Linking,
     RefreshControl,
     ScrollView,
@@ -20,9 +21,12 @@ import {
 import ScreenSurface from "../components/ScreenSurface";
 import { useWallet } from "../contexts/WalletContext";
 import {
+    FeedPost,
     NotificationItem,
     SessionAccess,
     WalletProfile,
+    deletePost,
+    getFeed,
     getMe,
     getNotifications,
     markAllNotificationsRead,
@@ -50,7 +54,8 @@ type ProfileTab =
   | "edit"
   | "appearance"
   | "content"
-  | "support";
+  | "support"
+  | "myPosts";
 
 const SUPPORT_EMAIL = "support@ananymous.app";
 const THEME_OPTIONS = [
@@ -140,6 +145,11 @@ const WalletScreen = () => {
     showPostsInFeed: true,
     safeMode: true,
   });
+  const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
+  const [myPostsLoading, setMyPostsLoading] = useState(false);
+  const [myPostsDeletingId, setMyPostsDeletingId] = useState<number | null>(
+    null,
+  );
 
   const isCompact = width < 390;
   const isSubpage = activeTab !== "overview";
@@ -224,6 +234,10 @@ const WalletScreen = () => {
           title: "Support",
           subtitle: "Get help or send a report quickly.",
         },
+        myPosts: {
+          title: "My Posts",
+          subtitle: "Everything you've shared, in one place.",
+        },
       })[activeTab],
     [activeTab],
   );
@@ -281,6 +295,66 @@ const WalletScreen = () => {
     useCallback(() => {
       void loadWallet();
     }, [loadWallet]),
+  );
+
+  const loadMyPosts = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    setMyPostsLoading(true);
+    try {
+      const response = await getFeed({ mine: true, limit: 50, token });
+      setMyPosts(response.data);
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to load your posts."),
+      );
+    } finally {
+      setMyPostsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab === "myPosts") {
+      void loadMyPosts();
+    }
+  }, [activeTab, loadMyPosts]);
+
+  const handleDeleteMyPost = useCallback(
+    (post: FeedPost) => {
+      if (!token) {
+        return;
+      }
+
+      Alert.alert(
+        "Delete post",
+        "This will remove your post from the feed. Continue?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              setMyPostsDeletingId(post.id);
+              try {
+                await deletePost(token, post.id);
+                setMyPosts((current) =>
+                  current.filter((item) => item.id !== post.id),
+                );
+              } catch (error) {
+                setStatusMessage(
+                  getFriendlyErrorMessage(error, "Unable to delete post."),
+                );
+              } finally {
+                setMyPostsDeletingId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [token],
   );
 
   useEffect(() => {
@@ -682,9 +756,7 @@ const WalletScreen = () => {
               <View style={styles.quickActionRow}>
                 <TouchableOpacity
                   style={styles.quickActionCard}
-                  onPress={() =>
-                    setStatusMessage("Your posts page is coming next.")
-                  }
+                  onPress={() => setActiveTab("myPosts")}
                 >
                   <Ionicons
                     name="list-outline"
@@ -1214,6 +1286,79 @@ const WalletScreen = () => {
             </TouchableOpacity>
           </View>
         ) : null}
+
+        {activeTab === "myPosts" ? (
+          <View style={styles.sectionCard}>
+            {myPostsLoading && !myPosts.length ? (
+              <View style={styles.myPostsLoading}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.emptyText}>Loading your posts...</Text>
+              </View>
+            ) : myPosts.length ? (
+              myPosts.map((post) => (
+                <View key={post.id} style={styles.myPostCard}>
+                  <Text style={styles.myPostBody} numberOfLines={4}>
+                    {post.body?.trim() || "(image post)"}
+                  </Text>
+                  <View style={styles.myPostMetaRow}>
+                    <View style={styles.myPostStat}>
+                      <Ionicons
+                        name="thumbs-up-outline"
+                        size={13}
+                        color={COLORS.gray}
+                      />
+                      <Text style={styles.myPostMetaText}>
+                        {post.upVotes}
+                      </Text>
+                    </View>
+                    <View style={styles.myPostStat}>
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={13}
+                        color={COLORS.gray}
+                      />
+                      <Text style={styles.myPostMetaText}>
+                        {post.commentCount}
+                      </Text>
+                    </View>
+                    <Text style={styles.myPostMetaText}>
+                      {new Date(post.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.myPostDeleteBtn}
+                      onPress={() => handleDeleteMyPost(post)}
+                      disabled={myPostsDeletingId === post.id}
+                    >
+                      {myPostsDeletingId === post.id ? (
+                        <ActivityIndicator size="small" color="#F87171" />
+                      ) : (
+                        <Ionicons
+                          name="trash-outline"
+                          size={15}
+                          color="#F87171"
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.myPostsLoading}>
+                <Ionicons
+                  name="list-outline"
+                  size={24}
+                  color={COLORS.gray}
+                />
+                <Text style={styles.emptyText}>
+                  You haven&apos;t posted anything yet.
+                </Text>
+              </View>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </ScreenSurface>
   );
@@ -1410,6 +1555,46 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   emptyText: { color: COLORS.gray, ...TYPOGRAPHY.label, marginTop: 10 },
+  myPostsLoading: {
+    alignItems: "center",
+    paddingVertical: 28,
+  },
+  myPostCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#111117",
+    padding: 14,
+    marginBottom: 10,
+  },
+  myPostBody: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+    marginBottom: 10,
+  },
+  myPostMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  myPostStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  myPostMetaText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+  },
+  myPostDeleteBtn: {
+    marginLeft: "auto",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(248,113,113,0.1)",
+  },
   identityStrip: {
     flexDirection: "row",
     flexWrap: "wrap",
