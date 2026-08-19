@@ -16,6 +16,7 @@ exports.listFeed = async (req, res, next) => {
       cityTag,
       contentMode,
       trending,
+      mine,
     } = req.query;
     const posts = await Post.list({
       cursor,
@@ -28,6 +29,7 @@ exports.listFeed = async (req, res, next) => {
       contentMode,
       trending: trending === "true",
       userId: req.user?.id || null,
+      mine: mine === "true" && Boolean(req.user?.id),
     });
     res.json({
       data: posts,

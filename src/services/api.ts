@@ -430,6 +430,7 @@ export const getFeed = async (params?: {
   cityTag?: string;
   contentMode?: string;
   trending?: boolean;
+  mine?: boolean;
   token?: string;
 }) => {
   const query = new URLSearchParams();
@@ -456,6 +457,9 @@ export const getFeed = async (params?: {
   }
   if (params?.trending) {
     query.set("trending", "true");
+  }
+  if (params?.mine) {
+    query.set("mine", "true");
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
