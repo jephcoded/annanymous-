@@ -17,7 +17,7 @@ import {
 
 import ScreenSurface from "../components/ScreenSurface";
 import { useWallet } from "../contexts/WalletContext";
-import { createPost } from "../services/api";
+import { createPost, uploadImage } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
@@ -52,6 +52,9 @@ const CreatePostScreen = () => {
   const [temporaryEnabled, setTemporaryEnabled] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [selectedImageDataUrl, setSelectedImageDataUrl] = useState<
+    string | null
+  >(null);
+  const [selectedImageMimeType, setSelectedImageMimeType] = useState<
     string | null
   >(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -115,6 +118,7 @@ const CreatePostScreen = () => {
       const mimeType = asset.mimeType || "image/jpeg";
       setSelectedImageUri(asset.uri);
       setSelectedImageDataUrl(`data:${mimeType};base64,${asset.base64}`);
+      setSelectedImageMimeType(mimeType);
       setStatusMessage(null);
     } catch (error) {
       setStatusMessage(
@@ -126,6 +130,7 @@ const CreatePostScreen = () => {
   const clearImage = () => {
     setSelectedImageUri(null);
     setSelectedImageDataUrl(null);
+    setSelectedImageMimeType(null);
   };
 
   const submitPost = async () => {
@@ -134,7 +139,7 @@ const CreatePostScreen = () => {
       return;
     }
 
-    if (!trimmedBody) {
+    if (!trimmedBody && !selectedImageUri) {
       return;
     }
 
@@ -142,9 +147,21 @@ const CreatePostScreen = () => {
     setStatusMessage(null);
 
     try {
+      let uploadedMediaUrl: string | null = null;
+      if (selectedImageUri) {
+        setStatusMessage("Uploading image...");
+        const uploadResponse = await uploadImage(token, {
+          uri: selectedImageUri,
+          type: selectedImageMimeType || "image/jpeg",
+          name: `post.${(selectedImageMimeType || "image/jpeg").split("/")[1] || "jpg"}`,
+        });
+        uploadedMediaUrl = uploadResponse.data.url;
+        setStatusMessage(null);
+      }
+
       await createPost(token, {
         body: trimmedBody,
-        mediaUrl: selectedImageDataUrl,
+        mediaUrl: uploadedMediaUrl,
         pollOptions: pollEnabled ? normalizedOptions : [],
         category,
         contentMode: temporaryEnabled

@@ -469,6 +469,31 @@ export const getFeed = async (params?: {
   };
 };
 
+export const uploadImage = async (
+  token: string,
+  image: { uri: string; name?: string; type?: string },
+) => {
+  const formData = new FormData();
+  formData.append("image", {
+    uri: image.uri,
+    name: image.name || "upload.jpg",
+    type: image.type || "image/jpeg",
+  } as unknown as Blob);
+
+  const response = await fetch(`${API_BASE_URL}/uploads`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Image upload failed");
+  }
+
+  return payload as { data: { url: string } };
+};
+
 export const createPost = async (
   token: string,
   payload: {

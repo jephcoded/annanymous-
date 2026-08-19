@@ -1,8 +1,10 @@
 const http = require("http");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const multer = require("multer");
 const { Server } = require("socket.io");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
@@ -13,6 +15,7 @@ const voteRoutes = require("./routes/voteRoutes");
 const authRoutes = require("./routes/authRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 const notificationService = require("./services/notificationService");
 
@@ -89,6 +92,12 @@ app.get("/api/v1/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
 });
 
+app.use(
+  "/uploads",
+  helmet.crossOriginResourcePolicy({ policy: "cross-origin" }),
+  express.static(path.join(__dirname, "uploads")),
+);
+
 const communityRoutes = require("./routes/communityRoutes");
 const communityMessageRoutes = require("./routes/communityMessageRoutes");
 app.use("/api/v1/posts", postRoutes);
@@ -99,6 +108,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/communities", communityRoutes);
 app.use("/api/v1/community-messages", communityMessageRoutes);
+app.use("/api/v1/uploads", uploadRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -115,12 +125,14 @@ app.use((error, req, res, next) => {
     return next(error);
   }
 
-  const status = error.status || 500;
+  const isUploadError =
+    error instanceof multer.MulterError || /image type/i.test(error.message || "");
+  const status = error.status || (isUploadError ? 400 : 500);
   console.error(error);
 
   res.status(status).json({
     error: {
-      code: error.code || "INTERNAL_SERVER_ERROR",
+      code: error.code || (isUploadError ? "UPLOAD_FAILED" : "INTERNAL_SERVER_ERROR"),
       message: error.message || "Something went wrong",
       status,
     },

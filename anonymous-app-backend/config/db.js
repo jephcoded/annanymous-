@@ -6,11 +6,9 @@ const connectionString = process.env.DATABASE_URL;
 const parsedUrl = connectionString ? new URL(connectionString) : null;
 const dnsPromises = dns.promises;
 
-const resolveDatabaseHost = async (hostname) => {
-  if (!hostname) {
-    return hostname;
-  }
+const FALLBACK_DNS_SERVERS = ["8.8.8.8", "1.1.1.1"];
 
+const tryResolve = async (hostname) => {
   try {
     const ipv4 = await dnsPromises.lookup(hostname, {
       family: 4,
@@ -38,6 +36,38 @@ const resolveDatabaseHost = async (hostname) => {
       } catch (resolve6Error) {
         throw lookupError || resolve4Error || resolve6Error;
       }
+    }
+  }
+
+  return null;
+};
+
+const resolveDatabaseHost = async (hostname) => {
+  if (!hostname) {
+    return hostname;
+  }
+
+  try {
+    const address = await tryResolve(hostname);
+    if (address) {
+      return address;
+    }
+  } catch (firstAttemptError) {
+    // Some networks (VPNs, certain Windows DNS setups) leave Node's
+    // resolver unable to reach a usable DNS server even though the OS
+    // resolver works fine. Retry once against public DNS directly.
+    const originalServers = dns.getServers();
+    dns.setServers(FALLBACK_DNS_SERVERS);
+
+    try {
+      const address = await tryResolve(hostname);
+      if (address) {
+        return address;
+      }
+    } catch (fallbackError) {
+      throw fallbackError || firstAttemptError;
+    } finally {
+      dns.setServers(originalServers);
     }
   }
 
