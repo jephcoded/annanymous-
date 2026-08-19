@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
     Linking,
     RefreshControl,
     ScrollView,
@@ -538,6 +539,15 @@ const WalletScreen = () => {
     await AsyncStorage.removeItem(ONBOARDING_KEY);
     setStatusMessage("Onboarding will appear the next time the app starts.");
   };
+
+  if (!profile && refreshing) {
+    return (
+      <ScreenSurface style={styles.loadingSurface}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading your profile...</Text>
+      </ScreenSurface>
+    );
+  }
 
   return (
     <ScreenSurface
@@ -1212,6 +1222,13 @@ const WalletScreen = () => {
 const styles = StyleSheet.create({
   surface: { flex: 1, padding: 16 },
   surfaceCompact: { paddingHorizontal: 14 },
+  loadingSurface: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: { color: COLORS.gray, ...TYPOGRAPHY.label },
   content: {
     flexGrow: 1,
     paddingTop: 24,
