@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import Animatable from "react-native-animatable";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -75,12 +74,7 @@ const ConnectWalletScreen = () => {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Animatable.View
-          animation="fadeInDown"
-          duration={480}
-          useNativeDriver
-          style={styles.brandCard}
-        >
+        <View style={styles.brandCard}>
           <View style={styles.brandMark}>
             <Ionicons
               name="shield-half-outline"
@@ -90,15 +84,10 @@ const ConnectWalletScreen = () => {
           </View>
           <Text style={styles.brandTitle}>ANON</Text>
           <Text style={styles.brandSubtitle}>Speak freely. Stay anonymous.</Text>
-        </Animatable.View>
+        </View>
 
         {view === "entry" ? (
-          <Animatable.View
-            animation="fadeInUp"
-            duration={480}
-            useNativeDriver
-            style={styles.entryPanel}
-          >
+          <View style={styles.entryPanel}>
             <PressableScale style={styles.primaryButton} onPress={openSignup}>
               <Text style={styles.primaryButtonText}>Get Started</Text>
             </PressableScale>
@@ -109,19 +98,14 @@ const ConnectWalletScreen = () => {
                 <Text style={styles.loginLinkAccent}>Log in</Text>
               </Text>
             </TouchableOpacity>
-          </Animatable.View>
+          </View>
         ) : (
-          <Animatable.View
-            animation="fadeInUp"
-            duration={420}
-            useNativeDriver
-            style={styles.panel}
-          >
+          <View style={styles.panel}>
             <TouchableOpacity style={styles.backButton} onPress={goBack}>
               <Ionicons name="chevron-back" size={18} color={COLORS.text} />
             </TouchableOpacity>
 
-            <Animatable.View animation="fadeIn" duration={260} useNativeDriver>
+            <View>
               <Text style={styles.sectionTitle}>
                 {isSignup ? "Create your account" : "Welcome back"}
               </Text>
@@ -212,7 +196,7 @@ const ConnectWalletScreen = () => {
                   />
                 </View>
               </View>
-            </Animatable.View>
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -241,7 +225,7 @@ const ConnectWalletScreen = () => {
                 </Text>
               </Text>
             </TouchableOpacity>
-          </Animatable.View>
+          </View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
