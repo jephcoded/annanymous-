@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { COLORS, TYPOGRAPHY } from "../theme";
 
@@ -9,23 +9,39 @@ type Props = {
 
 type State = {
   hasError: boolean;
+  message: string | null;
+  stack: string | null;
+  componentStack: string | null;
 };
 
 class AppErrorBoundary extends React.Component<Props, State> {
   state: State = {
     hasError: false,
+    message: null,
+    stack: null,
+    componentStack: null,
   };
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return {
+      hasError: true,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+    };
   }
 
-  componentDidCatch(error: Error) {
-    console.error("App render crashed", error);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("App render crashed", error, info.componentStack);
+    this.setState({ componentStack: info.componentStack || null });
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false });
+    this.setState({
+      hasError: false,
+      message: null,
+      stack: null,
+      componentStack: null,
+    });
   };
 
   render() {
@@ -44,6 +60,30 @@ class AppErrorBoundary extends React.Component<Props, State> {
           <TouchableOpacity style={styles.button} onPress={this.handleRetry}>
             <Text style={styles.buttonText}>Retry launch</Text>
           </TouchableOpacity>
+          {this.state.message ? (
+            <ScrollView style={styles.detailsBox}>
+              <Text style={styles.detailsLabel}>Error</Text>
+              <Text selectable style={styles.detailsText}>
+                {this.state.message}
+              </Text>
+              {this.state.componentStack ? (
+                <>
+                  <Text style={styles.detailsLabel}>Component stack</Text>
+                  <Text selectable style={styles.detailsText}>
+                    {this.state.componentStack}
+                  </Text>
+                </>
+              ) : null}
+              {this.state.stack ? (
+                <>
+                  <Text style={styles.detailsLabel}>JS stack</Text>
+                  <Text selectable style={styles.detailsText}>
+                    {this.state.stack}
+                  </Text>
+                </>
+              ) : null}
+            </ScrollView>
+          ) : null}
         </View>
       </View>
     );
@@ -89,6 +129,25 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.text,
     ...TYPOGRAPHY.label,
+  },
+  detailsBox: {
+    marginTop: 18,
+    maxHeight: 260,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: "#050505",
+    padding: 12,
+  },
+  detailsLabel: {
+    color: COLORS.primary,
+    ...TYPOGRAPHY.meta,
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  detailsText: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
   },
 });
 
