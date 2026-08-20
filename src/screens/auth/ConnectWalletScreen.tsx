@@ -19,6 +19,7 @@ import { useWallet } from "../../contexts/WalletContext";
 import { COLORS, TYPOGRAPHY } from "../../theme";
 
 type AuthView = "entry" | "signup" | "login";
+type FieldName = "name" | "email" | "password";
 
 const ConnectWalletScreen = () => {
   const { error, isAuthenticating, signIn, signUp } = useWallet();
@@ -27,6 +28,7 @@ const ConnectWalletScreen = () => {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [focusedField, setFocusedField] = useState<FieldName | null>(null);
 
   const isBusy = isAuthenticating;
   const isSignup = view === "signup";
@@ -131,30 +133,50 @@ const ConnectWalletScreen = () => {
 
               <View style={styles.formStack}>
                 {isSignup ? (
-                  <View style={styles.inputCard}>
+                  <View
+                    style={[
+                      styles.inputCard,
+                      focusedField === "name" && styles.inputCardFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="person-outline"
                       size={18}
-                      color={COLORS.gray}
+                      color={
+                        focusedField === "name" ? COLORS.primary : COLORS.gray
+                      }
                     />
                     <TextInput
                       value={displayName}
                       onChangeText={setDisplayName}
+                      onFocus={() => setFocusedField("name")}
+                      onBlur={() => setFocusedField(null)}
                       placeholder="Display name"
-                      placeholderTextColor="rgba(247,242,255,0.34)"
+                      placeholderTextColor="rgba(247,242,255,0.32)"
                       style={styles.input}
                       editable={!isBusy}
                     />
                   </View>
                 ) : null}
 
-                <View style={styles.inputCard}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.gray} />
+                <View
+                  style={[
+                    styles.inputCard,
+                    focusedField === "email" && styles.inputCardFocused,
+                  ]}
+                >
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color={focusedField === "email" ? COLORS.primary : COLORS.gray}
+                  />
                   <TextInput
                     value={email}
                     onChangeText={setEmail}
+                    onFocus={() => setFocusedField("email")}
+                    onBlur={() => setFocusedField(null)}
                     placeholder="Email"
-                    placeholderTextColor="rgba(247,242,255,0.34)"
+                    placeholderTextColor="rgba(247,242,255,0.32)"
                     style={styles.input}
                     autoCapitalize="none"
                     keyboardType="email-address"
@@ -162,19 +184,28 @@ const ConnectWalletScreen = () => {
                   />
                 </View>
 
-                <View style={styles.inputCard}>
+                <View
+                  style={[
+                    styles.inputCard,
+                    focusedField === "password" && styles.inputCardFocused,
+                  ]}
+                >
                   <Ionicons
                     name="lock-closed-outline"
                     size={18}
-                    color={COLORS.gray}
+                    color={
+                      focusedField === "password" ? COLORS.primary : COLORS.gray
+                    }
                   />
                   <TextInput
                     value={password}
                     onChangeText={setPassword}
+                    onFocus={() => setFocusedField("password")}
+                    onBlur={() => setFocusedField(null)}
                     placeholder={
                       isSignup ? "Password (6+ characters)" : "Password"
                     }
-                    placeholderTextColor="rgba(247,242,255,0.34)"
+                    placeholderTextColor="rgba(247,242,255,0.32)"
                     style={styles.input}
                     secureTextEntry
                     editable={!isBusy}
@@ -320,19 +351,28 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   formStack: {
-    gap: 12,
-    marginBottom: 8,
+    gap: 14,
+    marginBottom: 10,
   },
   inputCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     backgroundColor: "#111117",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.05)",
+  },
+  inputCardFocused: {
+    borderColor: "rgba(139,61,255,0.55)",
+    backgroundColor: "#141420",
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
   },
   input: {
     flex: 1,
