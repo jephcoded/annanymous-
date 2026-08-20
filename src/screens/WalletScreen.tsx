@@ -83,6 +83,17 @@ const THEME_OPTIONS = [
 
 const formatDate = (timestamp: string) => new Date(timestamp).toLocaleString();
 
+const getNotificationIcon = (type: string) => {
+  switch (type) {
+    case "post_created":
+      return "newspaper-outline";
+    case "community_message":
+      return "chatbubbles-outline";
+    default:
+      return "notifications-outline";
+  }
+};
+
 const buildMailtoUrl = (recipient: string, subject: string, body: string) =>
   `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
@@ -962,11 +973,23 @@ const WalletScreen = () => {
                   ]}
                   onPress={() => markSingleRead(item.id)}
                 >
-                  <Text style={styles.alertTitle}>{item.title}</Text>
-                  <Text style={styles.alertBody}>{item.body}</Text>
-                  <Text style={styles.alertTime}>
-                    {formatDate(item.createdAt)}
-                  </Text>
+                  <View style={styles.alertRow}>
+                    <View style={styles.settingsRowIcon}>
+                      <Ionicons
+                        name={getNotificationIcon(item.type)}
+                        size={16}
+                        color={COLORS.primary}
+                      />
+                    </View>
+                    <View style={styles.alertCopy}>
+                      <Text style={styles.alertTitle}>{item.title}</Text>
+                      <Text style={styles.alertBody}>{item.body}</Text>
+                      <Text style={styles.alertTime}>
+                        {formatDate(item.createdAt)}
+                      </Text>
+                    </View>
+                    {!item.isRead ? <View style={styles.unreadDot} /> : null}
+                  </View>
                 </TouchableOpacity>
               ))
             ) : (
@@ -983,7 +1006,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("edit")}
               >
-                <Text style={styles.settingsRowText}>Edit Profile</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="person-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Edit Profile</Text>
+                </View>
                 <Ionicons
                   name="chevron-forward"
                   size={16}
@@ -994,7 +1022,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("password")}
               >
-                <Text style={styles.settingsRowText}>Change Password</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="lock-closed-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Change Password</Text>
+                </View>
                 <Ionicons
                   name="chevron-forward"
                   size={16}
@@ -1005,7 +1038,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("privacy")}
               >
-                <Text style={styles.settingsRowText}>Privacy & Safety</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Privacy & Safety</Text>
+                </View>
                 <Ionicons
                   name="chevron-forward"
                   size={16}
@@ -1016,7 +1054,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("alerts")}
               >
-                <Text style={styles.settingsRowText}>Notifications</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="notifications-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Notifications</Text>
+                </View>
                 <Ionicons
                   name="chevron-forward"
                   size={16}
@@ -1031,7 +1074,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("appearance")}
               >
-                <Text style={styles.settingsRowText}>Appearance</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="color-palette-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Appearance</Text>
+                </View>
                 <Text style={styles.settingsRowMeta}>
                   {activeThemeOption.title}
                 </Text>
@@ -1040,7 +1088,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("content")}
               >
-                <Text style={styles.settingsRowText}>Content Preferences</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="options-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Content Preferences</Text>
+                </View>
                 <Text style={styles.settingsRowMeta}>
                   {settings?.mutedKeywords?.length ?? 0} muted
                 </Text>
@@ -1049,7 +1102,12 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={resetOnboarding}
               >
-                <Text style={styles.settingsRowText}>Reset Onboarding</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="refresh-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Reset Onboarding</Text>
+                </View>
                 <Ionicons
                   name="chevron-forward"
                   size={16}
@@ -1064,14 +1122,24 @@ const WalletScreen = () => {
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("support")}
               >
-                <Text style={styles.settingsRowText}>Help Center</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="help-circle-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Help Center</Text>
+                </View>
                 <Text style={styles.settingsRowMeta}>Support</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.settingsRow}
                 onPress={() => void openSupportComposer("report")}
               >
-                <Text style={styles.settingsRowText}>Report a Problem</Text>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsRowIcon}>
+                    <Ionicons name="flag-outline" size={16} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.settingsRowText}>Report a Problem</Text>
+                </View>
                 <Text style={styles.settingsRowMeta}>Email</Text>
               </TouchableOpacity>
             </View>
@@ -1446,7 +1514,7 @@ const WalletScreen = () => {
                           color="#F87171"
                         />
                       )}
-                    </TouchableOpacity>
+                   </TouchableOpacity>
                   </View>
                 </View>
               ))
@@ -1863,9 +1931,22 @@ const styles = StyleSheet.create({
     borderColor: "rgba(139,61,255,0.26)",
     backgroundColor: "rgba(139,61,255,0.08)",
   },
+  alertRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  alertCopy: { flex: 1 },
   alertTitle: { color: COLORS.text, ...TYPOGRAPHY.label, marginBottom: 6 },
   alertBody: { color: COLORS.gray, ...TYPOGRAPHY.meta, marginBottom: 8 },
   alertTime: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    marginTop: 4,
+  },
   settingsGroup: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1886,6 +1967,20 @@ const styles = StyleSheet.create({
   },
   settingsRowText: { color: COLORS.text, ...TYPOGRAPHY.label },
   settingsRowMeta: { color: COLORS.gray, ...TYPOGRAPHY.meta },
+  settingsRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 1,
+  },
+  settingsRowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139,61,255,0.14)",
+  },
   sectionDescription: {
     color: COLORS.gray,
     ...TYPOGRAPHY.label,
