@@ -352,11 +352,6 @@ const styles = StyleSheet.create({
   inputCardFocused: {
     borderColor: "rgba(139,61,255,0.55)",
     backgroundColor: "#141420",
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 3,
   },
   input: {
     flex: 1,
