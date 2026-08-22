@@ -195,6 +195,12 @@ const ConnectWalletScreen = () => {
                     editable={!isBusy}
                   />
                 </View>
+
+                {isLogin ? (
+                  <TouchableOpacity style={styles.forgotLink}>
+                    <Text style={styles.forgotLinkText}>Forgot password?</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
 
@@ -286,11 +292,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.meta,
   },
   entryPanel: {
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "#09090C",
-    padding: 24,
+    paddingHorizontal: 4,
   },
   loginLink: {
     marginTop: 16,
@@ -309,11 +311,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   panel: {
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "#09090C",
-    padding: 24,
+    paddingHorizontal: 4,
   },
   backButton: {
     width: 36,
@@ -335,16 +333,16 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   formStack: {
-    gap: 14,
-    marginBottom: 10,
+    gap: 22,
+    marginBottom: 14,
   },
   inputCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 17,
     backgroundColor: "#111117",
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.05)",
@@ -359,6 +357,14 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.label,
     paddingVertical: 0,
   },
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: -6,
+  },
+  forgotLinkText: {
+    color: COLORS.primary,
+    ...TYPOGRAPHY.meta,
+  },
   errorText: {
     color: "#F87171",
     ...TYPOGRAPHY.label,
@@ -369,10 +375,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
+    width: "66%",
+    minWidth: 190,
     borderRadius: 18,
     backgroundColor: COLORS.primary,
-    paddingVertical: 17,
-    marginTop: 6,
+    paddingVertical: 16,
+    marginTop: 10,
     shadowColor: COLORS.primary,
     shadowOpacity: 0.32,
     shadowRadius: 16,
