@@ -33,7 +33,9 @@ import {
     getPost,
     markAllNotificationsRead,
     markNotificationRead,
+    resendVerificationEmail,
     updateProfile,
+    verifyEmail,
 } from "../services/api";
 import { COLORS, TYPOGRAPHY } from "../theme";
 import { loadSavedPostIds, persistSavedPostIds } from "../utils/savedPosts";
@@ -60,7 +62,8 @@ type ProfileTab =
   | "support"
   | "myPosts"
   | "saved"
-  | "password";
+  | "password"
+  | "emailVerification";
 
 const SUPPORT_EMAIL = "support@ananymous.app";
 const THEME_OPTIONS = [
@@ -172,6 +175,9 @@ const WalletScreen = () => {
   const [newPasswordDraft, setNewPasswordDraft] = useState("");
   const [confirmPasswordDraft, setConfirmPasswordDraft] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [verificationCodeDraft, setVerificationCodeDraft] = useState("");
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [resendingCode, setResendingCode] = useState(false);
 
   const isCompact = width < 390;
   const isSubpage = activeTab !== "overview";
@@ -267,6 +273,10 @@ const WalletScreen = () => {
         password: {
           title: "Change Password",
           subtitle: "Keep your account secure.",
+        },
+        emailVerification: {
+          title: "Verify Email",
+          subtitle: "Confirm it's really you.",
         },
       })[activeTab],
     [activeTab],
@@ -427,6 +437,54 @@ const WalletScreen = () => {
       setChangingPassword(false);
     }
   }, [confirmPasswordDraft, currentPasswordDraft, newPasswordDraft, token]);
+
+  const handleResendVerification = useCallback(async () => {
+    if (!token) {
+      setStatusMessage("Your session expired. Log in again to continue.");
+      return;
+    }
+
+    setResendingCode(true);
+    try {
+      const response = await resendVerificationEmail(token);
+      setStatusMessage(response.message);
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to send a verification code."),
+      );
+    } finally {
+      setResendingCode(false);
+    }
+  }, [token]);
+
+  const handleVerifyEmail = useCallback(async () => {
+    if (!token) {
+      setStatusMessage("Your session expired. Log in again to continue.");
+      return;
+    }
+
+    if (!verificationCodeDraft.trim()) {
+      setStatusMessage("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setVerifyingEmail(true);
+    try {
+      await verifyEmail(token, verificationCodeDraft.trim());
+      setVerificationCodeDraft("");
+      setProfile((current) =>
+        current ? { ...current, emailVerified: true } : current,
+      );
+      setStatusMessage("Email verified.");
+      setActiveTab("settings");
+    } catch (error) {
+      setStatusMessage(
+        getFriendlyErrorMessage(error, "Unable to verify that code."),
+      );
+    } finally {
+      setVerifyingEmail(false);
+    }
+  }, [token, verificationCodeDraft]);
 
   const handleDeleteMyPost = useCallback(
     (post: FeedPost) => {
@@ -1034,6 +1092,39 @@ const WalletScreen = () => {
                   color={COLORS.gray}
                 />
               </TouchableOpacity>
+              {profile?.authType === "password" ? (
+                <TouchableOpacity
+                  style={styles.settingsRow}
+                  onPress={() => setActiveTab("emailVerification")}
+                >
+                  <View style={styles.settingsRowLeft}>
+                    <View style={styles.settingsRowIcon}>
+                      <Ionicons
+                        name="mail-outline"
+                        size={16}
+                        color={COLORS.primary}
+                      />
+                    </View>
+                    <Text style={styles.settingsRowText}>Verify Email</Text>
+                  </View>
+                  {profile?.emailVerified ? (
+                    <View style={styles.verifiedPill}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={13}
+                        color="#47D16C"
+                      />
+                      <Text style={styles.verifiedPillText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={COLORS.gray}
+                    />
+                  )}
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={styles.settingsRow}
                 onPress={() => setActiveTab("privacy")}
@@ -1639,6 +1730,63 @@ const WalletScreen = () => {
             </TouchableOpacity>
           </View>
         ) : null}
+
+        {activeTab === "emailVerification" ? (
+          <View style={styles.sectionCard}>
+            {profile?.emailVerified ? (
+              <View style={styles.myPostsLoading}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={24}
+                  color="#47D16C"
+                />
+                <Text style={styles.emptyText}>
+                  {profile?.email} is verified.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.sectionDescription}>
+                  We sent a 6-digit code to {profile?.email}. Enter it below,
+                  or resend if it didn&apos;t arrive.
+                </Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputGroupLabel}>Verification code</Text>
+                  <TextInput
+                    value={verificationCodeDraft}
+                    onChangeText={setVerificationCodeDraft}
+                    placeholder="6-digit code"
+                    placeholderTextColor={COLORS.gray}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    style={styles.profileInput}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryCta,
+                    verifyingEmail && styles.primaryCtaDisabled,
+                  ]}
+                  onPress={() => void handleVerifyEmail()}
+                  disabled={verifyingEmail}
+                >
+                  <Text style={styles.primaryCtaText}>
+                    {verifyingEmail ? "Verifying..." : "Verify email"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.resendLink}
+                  onPress={() => void handleResendVerification()}
+                  disabled={resendingCode}
+                >
+                  <Text style={styles.sectionLink}>
+                    {resendingCode ? "Sending..." : "Resend code"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        ) : null}
       </ScrollView>
     </ScreenSurface>
   );
@@ -2139,6 +2287,24 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   primaryCtaText: { color: COLORS.text, ...TYPOGRAPHY.button },
+  resendLink: {
+    alignItems: "center",
+    marginTop: 14,
+  },
+  verifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(71,209,108,0.12)",
+  },
+  verifiedPillText: {
+    color: "#47D16C",
+    ...TYPOGRAPHY.meta,
+    fontSize: 11,
+  },
 });
 
 export default WalletScreen;

@@ -186,6 +186,7 @@ export type WalletProfile = {
   displayName: string | null;
   bio?: string | null;
   authType?: string | null;
+  emailVerified?: boolean;
   createdAt: string;
   postCount: number;
   commentCount: number;
@@ -684,6 +685,19 @@ export const confirmPasswordReset = async (payload: {
   request<{ message: string }>("/auth/password/reset", {
     method: "POST",
     body: payload,
+  });
+
+export const resendVerificationEmail = async (token: string) =>
+  request<{ message: string }>("/auth/email/resend", {
+    method: "POST",
+    token,
+  });
+
+export const verifyEmail = async (token: string, code: string) =>
+  request<{ message: string }>("/auth/email/verify", {
+    method: "POST",
+    token,
+    body: { code },
   });
 
 export const getSettings = async (token: string) =>
