@@ -19,6 +19,7 @@ import PencilSquare from "react-native-bootstrap-icons/icons/pencil-square";
 import ShieldLock from "react-native-bootstrap-icons/icons/shield-lock";
 import ShieldLockFill from "react-native-bootstrap-icons/icons/shield-lock-fill";
 
+import SwipeableTabScreen from "./components/SwipeableTabScreen";
 import { useWallet } from "./contexts/WalletContext";
 import { COLORS, getAppAppearance, TYPOGRAPHY } from "./theme";
 
@@ -304,26 +305,46 @@ const AppNavigator = () => {
             },
           })}
         >
-          <Tab.Screen
-            name="Home"
-            component={HomeStackScreen}
-            options={{ title: "Feed" }}
-          />
-          <Tab.Screen
-            name="Post"
-            component={PostStackScreen}
-            options={{ title: "Post" }}
-          />
-          <Tab.Screen
-            name="Communities"
-            component={CommunityStackScreen}
-            options={{ title: "Community" }}
-          />
-          <Tab.Screen
-            name="Wallet"
-            getComponent={() => require("./screens/WalletScreen").default}
-            options={{ title: "Profile" }}
-          />
+          <Tab.Screen name="Home" options={{ title: "Feed" }}>
+            {({ route }: { route: any }) => (
+              <SwipeableTabScreen
+                tabName="Home"
+                atRoot={!route.state || route.state.index === 0}
+              >
+                <HomeStackScreen />
+              </SwipeableTabScreen>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Post" options={{ title: "Post" }}>
+            {({ route }: { route: any }) => (
+              <SwipeableTabScreen
+                tabName="Post"
+                atRoot={!route.state || route.state.index === 0}
+              >
+                <PostStackScreen />
+              </SwipeableTabScreen>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Communities" options={{ title: "Community" }}>
+            {({ route }: { route: any }) => (
+              <SwipeableTabScreen
+                tabName="Communities"
+                atRoot={!route.state || route.state.index === 0}
+              >
+                <CommunityStackScreen />
+              </SwipeableTabScreen>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Wallet" options={{ title: "Profile" }}>
+            {() => {
+              const WalletScreen = require("./screens/WalletScreen").default;
+              return (
+                <SwipeableTabScreen tabName="Wallet" atRoot>
+                  <WalletScreen />
+                </SwipeableTabScreen>
+              );
+            }}
+          </Tab.Screen>
         </Tab.Navigator>
       </NavigationContainer>
     </View>

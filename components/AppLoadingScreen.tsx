@@ -20,24 +20,22 @@ export default function AppLoadingScreen({
       <View pointerEvents="none" style={styles.topGlow} />
       <View pointerEvents="none" style={styles.bottomGlow} />
 
-      <View style={styles.card}>
-        <View style={styles.logoShell}>
-          <Image
-            source={require("../assets/images/icon.png")}
-            style={styles.logo}
-            contentFit="contain"
-            transition={0}
-          />
-        </View>
+      <View style={styles.logoShell}>
+        <Image
+          source={require("../assets/images/icon.png")}
+          style={styles.logo}
+          contentFit="contain"
+          transition={0}
+        />
+      </View>
 
-        <Text style={styles.eyebrow}>PRIVATE BY DEFAULT</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+      <Text style={styles.eyebrow}>PRIVATE BY DEFAULT</Text>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
 
-        <View style={styles.statusRow}>
-          <ActivityIndicator size="small" color={COLORS.secondary} />
-          <Text style={styles.statusText}>{statusText}</Text>
-        </View>
+      <View style={styles.statusRow}>
+        <ActivityIndicator size="small" color={COLORS.secondary} />
+        <Text style={styles.statusText}>{statusText}</Text>
       </View>
     </View>
   );
@@ -66,16 +64,6 @@ const styles = StyleSheet.create({
     height: 280,
     borderRadius: 140,
     backgroundColor: "rgba(255,255,255,0.02)",
-  },
-  card: {
-    width: "100%",
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "rgba(10,10,12,0.94)",
-    paddingVertical: 28,
-    paddingHorizontal: 22,
-    alignItems: "center",
   },
   logoShell: {
     width: 152,
@@ -110,12 +98,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
   statusText: {
     color: COLORS.text,
