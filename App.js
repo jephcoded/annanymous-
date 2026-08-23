@@ -15,6 +15,7 @@ import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { LogBox, Platform, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import AccountReadyScreen from "./components/AccountReadyScreen";
@@ -231,10 +232,18 @@ export default function App() {
   );
 
   if (isAdminWebRoute) {
-    return <BrowserWalletProvider>{content}</BrowserWalletProvider>;
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <BrowserWalletProvider>{content}</BrowserWalletProvider>
+      </GestureHandlerRootView>
+    );
   }
 
   return (
-    <WalletProvider onBeforeConnect={prepareWalletUi}>{content}</WalletProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <WalletProvider onBeforeConnect={prepareWalletUi}>
+        {content}
+      </WalletProvider>
+    </GestureHandlerRootView>
   );
 }
