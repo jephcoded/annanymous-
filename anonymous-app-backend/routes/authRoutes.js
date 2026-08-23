@@ -15,6 +15,8 @@ router.post(
   authLimiter,
   authController.changePassword,
 );
+router.post("/password/forgot", authLimiter, authController.forgotPassword);
+router.post("/password/reset", authLimiter, authController.resetPassword);
 router.get("/settings", authMiddleware, authController.getSettings);
 router.patch("/settings", authMiddleware, authController.updateSettings);
 router.post(

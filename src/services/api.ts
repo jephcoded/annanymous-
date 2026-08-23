@@ -670,6 +670,22 @@ export const changePassword = async (
     body: payload,
   });
 
+export const requestPasswordReset = async (email: string) =>
+  request<{ message: string }>("/auth/password/forgot", {
+    method: "POST",
+    body: { email },
+  });
+
+export const confirmPasswordReset = async (payload: {
+  email: string;
+  code: string;
+  newPassword: string;
+}) =>
+  request<{ message: string }>("/auth/password/reset", {
+    method: "POST",
+    body: payload,
+  });
+
 export const getSettings = async (token: string) =>
   request<{ data: UserSettings }>("/auth/settings", { token });
 
