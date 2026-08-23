@@ -288,6 +288,20 @@ CREATE TABLE IF NOT EXISTS password_reset_codes (
 CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user
   ON password_reset_codes(user_id, used_at, expires_at DESC);
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_verification_codes_user
+  ON email_verification_codes(user_id, used_at, expires_at DESC);
+
 -- Helpful indexes for scrolling feeds + joins
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at);

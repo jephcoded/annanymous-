@@ -25,6 +25,7 @@ const sanitizeUser = (user) => ({
   displayName: user.display_name || null,
   bio: user.bio || null,
   authType: user.auth_type || "wallet",
+  emailVerified: Boolean(user.email_verified_at),
   isAdmin: isAdminWallet(user.wallet_address),
 });
 
@@ -70,6 +71,16 @@ exports.signup = async (req, res, next) => {
       bio,
     });
     const token = signUserToken(user);
+
+    void User.createEmailVerificationCode(user.id)
+      .then((result) => {
+        if (result) {
+          return emailService.sendVerificationEmail(result.email, result.code);
+        }
+      })
+      .catch((verificationError) => {
+        console.error("Failed to send verification email", verificationError);
+      });
 
     res.status(201).json({
       token,
@@ -281,6 +292,46 @@ exports.resetPassword = async (req, res, next) => {
 
     await User.resetPasswordWithCode({ email, code, newPassword });
     res.json({ message: "Password reset. You can log in now." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resendVerificationEmail = async (req, res, next) => {
+  try {
+    const result = await User.createEmailVerificationCode(req.user.id);
+    if (!result) {
+      return res.json({ message: "Your email is already verified." });
+    }
+
+    void emailService
+      .sendVerificationEmail(result.email, result.code)
+      .catch((error) => {
+        console.error("Failed to send verification email", error);
+      });
+
+    res.json({ message: "Verification code sent." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { code } = req.body || {};
+
+    if (!code) {
+      return res.status(400).json({
+        error: {
+          code: "VERIFICATION_CODE_REQUIRED",
+          message: "code is required",
+          status: 400,
+        },
+      });
+    }
+
+    await User.verifyEmailWithCode(req.user.id, code);
+    res.json({ message: "Email verified." });
   } catch (error) {
     next(error);
   }
