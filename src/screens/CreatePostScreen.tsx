@@ -236,121 +236,95 @@ const CreatePostScreen = () => {
           </TouchableOpacity>
         </View>
 
+        <TextInput
+          style={styles.storyInput}
+          placeholder="What&apos;s on your mind?"
+          placeholderTextColor={COLORS.gray}
+          multiline
+          value={body}
+          onChangeText={setBody}
+          maxLength={BODY_LIMIT}
+          textAlignVertical="top"
+        />
+        <Text style={styles.counterText}>
+          {characterCount}/{BODY_LIMIT}
+        </Text>
+
+        {selectedImageUri ? (
+          <View style={styles.imagePreviewCard}>
+            <Image
+              source={{ uri: selectedImageUri }}
+              style={styles.imagePreview}
+              contentFit="cover"
+            />
+            <TouchableOpacity
+              style={styles.removeImageButton}
+              onPress={clearImage}
+            >
+              <Ionicons name="trash-outline" size={16} color={COLORS.text} />
+              <Text style={styles.removeImageText}>Remove image</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <View
-          style={[styles.composerCard, isCompact && styles.composerCardCompact]}
+          style={[styles.categoryGrid, isCompact && styles.categoryGridCompact]}
         >
-          <Text style={styles.composerPrompt}>What&apos;s on your mind?</Text>
-          <TextInput
-            style={styles.storyInput}
-            placeholder="Share anonymously..."
-            placeholderTextColor={COLORS.gray}
-            multiline
-            value={body}
-            onChangeText={setBody}
-            maxLength={BODY_LIMIT}
-            textAlignVertical="top"
-          />
-          <Text style={styles.counterText}>
-            {characterCount}/{BODY_LIMIT}
-          </Text>
-
-          {selectedImageUri ? (
-            <View style={styles.imagePreviewCard}>
-              <Image
-                source={{ uri: selectedImageUri }}
-                style={styles.imagePreview}
-                contentFit="cover"
-              />
+          {COMPOSER_CATEGORIES.map((item) => {
+            const active = category === item.id;
+            return (
               <TouchableOpacity
-                style={styles.removeImageButton}
-                onPress={clearImage}
+                key={item.id}
+                style={[styles.categoryPill, active && styles.categoryPillActive]}
+                onPress={() => setCategory(item.id)}
               >
-                <Ionicons name="trash-outline" size={16} color={COLORS.text} />
-                <Text style={styles.removeImageText}>Remove image</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          <View
-            style={[
-              styles.categoryGrid,
-              isCompact && styles.categoryGridCompact,
-            ]}
-          >
-            {COMPOSER_CATEGORIES.map((item) => {
-              const active = category === item.id;
-              return (
-                <TouchableOpacity
-                  key={item.id}
+                <Text
                   style={[
-                    styles.categoryPill,
-                    isCompact && styles.categoryPillCompact,
-                    active && styles.categoryPillActive,
+                    styles.categoryPillText,
+                    active && styles.categoryPillTextActive,
                   ]}
-                  onPress={() => setCategory(item.id)}
                 >
-                  <Text
-                    style={[
-                      styles.categoryPillText,
-                      isCompact && styles.categoryPillTextCompact,
-                      active && styles.categoryPillTextActive,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-          <View
-            style={[
-              styles.composerActionsRow,
-              isCompact && styles.composerActionsRowCompact,
-            ]}
+        <View style={styles.composerActionsRow}>
+          <TouchableOpacity
+            style={styles.quickSquareAction}
+            activeOpacity={0.88}
+            onPress={() => void pickImage()}
           >
-            <TouchableOpacity
-              style={[
-                styles.quickSquareAction,
-                isCompact && styles.quickSquareActionCompact,
-              ]}
-              activeOpacity={0.88}
-              onPress={() => void pickImage()}
-            >
-              <Ionicons name="image-outline" size={18} color={COLORS.accent} />
-              <Text style={styles.quickSquareText}>
-                {selectedImageUri ? "Change image" : "Add image"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.quickSquareAction,
-                isCompact && styles.quickSquareActionCompact,
-              ]}
-              onPress={() => setPollEnabled((current) => !current)}
-            >
-              <Ionicons
-                name="stats-chart-outline"
-                size={18}
-                color={COLORS.accent}
-              />
-              <Text style={styles.quickSquareText}>
-                {pollEnabled ? "Poll on" : "Add poll"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.quickSquareAction,
-                isCompact && styles.quickSquareActionCompact,
-              ]}
-              onPress={() => setTemporaryEnabled((current) => !current)}
-            >
-              <Ionicons name="time-outline" size={18} color={COLORS.accent} />
-              <Text style={styles.quickSquareText}>
-                {temporaryEnabled ? "24h on" : "24h post"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+            <Ionicons name="image-outline" size={19} color={COLORS.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.quickSquareAction,
+              pollEnabled && styles.quickSquareActionActive,
+            ]}
+            onPress={() => setPollEnabled((current) => !current)}
+          >
+            <Ionicons
+              name="stats-chart-outline"
+              size={19}
+              color={pollEnabled ? COLORS.primary : COLORS.accent}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.quickSquareAction,
+              temporaryEnabled && styles.quickSquareActionActive,
+            ]}
+            onPress={() => setTemporaryEnabled((current) => !current)}
+          >
+            <Ionicons
+              name="time-outline"
+              size={19}
+              color={temporaryEnabled ? COLORS.primary : COLORS.accent}
+            />
+          </TouchableOpacity>
         </View>
 
         {statusMessage ? (
@@ -372,36 +346,32 @@ const CreatePostScreen = () => {
           </View>
         ) : null}
 
-        <View style={styles.settingsCard}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingTitle}>Share my location</Text>
-              <Text style={styles.settingSubtitle}>(Approximately)</Text>
-            </View>
-            <Switch
-              value={shareLocation}
-              onValueChange={setShareLocation}
-              trackColor={{ false: "#2A2233", true: "#8B3DFF88" }}
-              thumbColor={shareLocation ? "#8B3DFF" : "#FBE4D8"}
-            />
+        <View style={styles.settingRow}>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>Share my location</Text>
+            <Text style={styles.settingSubtitle}>(Approximately)</Text>
           </View>
-          <View style={styles.settingRowLast}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingTitle}>Post anonymously</Text>
-              <Text style={styles.settingSubtitle}>
-                Your identity is hidden
-              </Text>
-            </View>
-            <View style={styles.lockBadge}>
-              <Ionicons name="checkmark-circle" size={18} color="#47D16C" />
-            </View>
+          <Switch
+            value={shareLocation}
+            onValueChange={setShareLocation}
+            trackColor={{ false: "#2A2233", true: "#8B3DFF88" }}
+            thumbColor={shareLocation ? "#8B3DFF" : "#FBE4D8"}
+          />
+        </View>
+        <View style={styles.settingRow}>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>Post anonymously</Text>
+            <Text style={styles.settingSubtitle}>Your identity is hidden</Text>
+          </View>
+          <View style={styles.lockBadge}>
+            <Ionicons name="checkmark-circle" size={18} color="#47D16C" />
           </View>
         </View>
 
         {pollEnabled ? (
           <>
             <Text style={styles.sectionLabel}>Poll options</Text>
-            <View style={styles.pollCard}>
+            <View style={styles.pollStack}>
               {pollOptions.map((option: string, index: number) => (
                 <View key={index} style={styles.optionRow}>
                   <TextInput
@@ -489,41 +459,24 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontFamily: TYPOGRAPHY.label.fontFamily,
   },
-  composerCard: {
-    backgroundColor: "#09090C",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    padding: 14,
-    marginBottom: 14,
-  },
-  composerCardCompact: {
-    padding: 12,
-  },
-  composerPrompt: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.label,
-    marginBottom: 10,
-  },
   storyInput: {
-    minHeight: 120,
-    maxHeight: 220,
-    borderRadius: 12,
+    minHeight: 180,
+    maxHeight: 320,
     paddingHorizontal: 0,
     paddingVertical: 0,
     color: COLORS.text,
     backgroundColor: "transparent",
     borderWidth: 0,
     ...TYPOGRAPHY.body,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10,
+    fontSize: 16,
+    lineHeight: 23,
+    marginBottom: 4,
   },
   counterText: {
     color: COLORS.gray,
     ...TYPOGRAPHY.meta,
     textAlign: "right",
-    marginBottom: 12,
+    marginBottom: 18,
   },
   imagePreviewCard: {
     borderRadius: 14,
@@ -552,103 +505,63 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+    gap: 18,
+    marginBottom: 22,
   },
   categoryGridCompact: {
-    gap: 6,
-    marginBottom: 10,
+    gap: 14,
+    marginBottom: 18,
   },
   categoryPill: {
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#101015",
-  },
-  categoryPillCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
   },
   categoryPillActive: {
     backgroundColor: "#8B3DFF",
+    paddingHorizontal: 14,
   },
   categoryPillText: {
-    color: COLORS.text,
-    fontSize: 11,
-    lineHeight: 14,
+    color: COLORS.gray,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: "600",
     fontFamily: TYPOGRAPHY.meta.fontFamily,
-  },
-  categoryPillTextCompact: {
-    fontSize: 10,
-    lineHeight: 12,
   },
   categoryPillTextActive: {
     color: "#FFFFFF",
   },
   composerActionsRow: {
     flexDirection: "row",
-    gap: 10,
-  },
-  composerActionsRowCompact: {
-    gap: 8,
+    gap: 12,
+    marginBottom: 22,
   },
   quickSquareAction: {
-    flex: 1,
-    minHeight: 68,
+    width: 46,
+    height: 46,
     borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    backgroundColor: "#101015",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
   },
-  quickSquareActionCompact: {
-    minHeight: 62,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-  },
-  quickSquareText: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.meta,
-    textAlign: "center",
+  quickSquareActionActive: {
+    backgroundColor: "rgba(139,61,255,0.16)",
   },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#09090C",
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
     padding: 12,
     marginBottom: 14,
   },
   statusText: { color: COLORS.text, flex: 1, ...TYPOGRAPHY.label },
-  settingsCard: {
-    backgroundColor: "#09090C",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 14,
-    marginBottom: 18,
-  },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    minHeight: 58,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-  },
-  settingRowLast: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 58,
+    minHeight: 52,
   },
   settingCopy: { flex: 1 },
   settingTitle: {
@@ -674,12 +587,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.label,
     marginBottom: 10,
   },
-  pollCard: {
-    backgroundColor: "#09090C",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    padding: 14,
+  pollStack: {
     marginBottom: 18,
   },
   optionRow: {

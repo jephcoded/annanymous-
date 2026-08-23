@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useRoute } from "@react-navigation/native";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -29,12 +29,46 @@ type CommunityChatRouteParams = {
   communityName?: string;
 };
 
-const QUICK_REPLIES = [
-  "Welcome in.",
-  "Share the update.",
-  "Who has context?",
-  "Let's verify first.",
+const AVATAR_PALETTE = [
+  "#8B3DFF",
+  "#FF6B9D",
+  "#35C7E3",
+  "#FFB03B",
+  "#4ADE80",
+  "#F87171",
 ];
+
+const getAvatarColor = (seed: string) => {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) % 997;
+  }
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+};
+
+const getInitial = (name?: string | null) =>
+  (name?.trim()?.[0] || "?").toUpperCase();
+
+const formatDayLabel = (isoDate: string) => {
+  const date = new Date(isoDate);
+  const today = new Date();
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (isSameDay(date, today)) {
+    return "Today";
+  }
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameDay(date, yesterday)) {
+    return "Yesterday";
+  }
+
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+};
 
 const CommunityChatScreen = () => {
   const route = useRoute();
@@ -108,6 +142,19 @@ const CommunityChatScreen = () => {
 
   const composerSpacing = tabBarHeight + 8;
 
+  const dateDividerIds = useMemo(() => {
+    const ids = new Set<number>();
+    let lastLabel: string | null = null;
+    messages.forEach((message) => {
+      const label = formatDayLabel(message.createdAt);
+      if (label !== lastLabel) {
+        ids.add(message.id);
+        lastLabel = label;
+      }
+    });
+    return ids;
+  }, [messages]);
+
   return (
     <ScreenSurface style={styles.surface}>
       <View style={styles.chatLayout}>
@@ -124,55 +171,34 @@ const CommunityChatScreen = () => {
           contentContainerStyle={styles.content}
           ListHeaderComponent={
             <View>
-              <View style={styles.headerCard}>
-                <View style={styles.headerTopRow}>
-                  <View style={styles.headerCopy}>
-                    <Text style={styles.headerEyebrow}>Community</Text>
-                    <Text style={styles.headerTitle}>
-                      {communityName || "Community Chat"}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.headerIconBtn}
-                    onPress={fetchMessages}
-                  >
-                    <Ionicons
-                      name="refresh-outline"
-                      size={18}
-                      color={COLORS.accent}
-                    />
-                  </TouchableOpacity>
+              <View style={styles.headerTopRow}>
+                <View style={styles.headerCopy}>
+                  <Text style={styles.headerEyebrow}>Community</Text>
+                  <Text style={styles.headerTitle}>
+                    {communityName || "Community Chat"}
+                  </Text>
+                  <Text style={styles.headerMeta}>
+                    {messages.length} message{messages.length === 1 ? "" : "s"}
+                    {" · "}
+                    {token ? "Text-only room" : "Session needed"}
+                  </Text>
                 </View>
-
-                <View style={styles.headerMetaRow}>
-                  <View style={styles.metaChip}>
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={13}
-                      color={COLORS.primary}
-                    />
-                    <Text style={styles.metaChipText}>
-                      {messages.length} messages
-                    </Text>
-                  </View>
-                  <View style={styles.metaChip}>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={13}
-                      color={COLORS.secondary}
-                    />
-                    <Text style={styles.metaChipText}>
-                      {token ? "Member access" : "Session needed"}
-                    </Text>
-                  </View>
-                </View>
+                <TouchableOpacity
+                  style={styles.headerIconBtn}
+                  onPress={fetchMessages}
+                >
+                  <Ionicons
+                    name="refresh-outline"
+                    size={18}
+                    color={COLORS.accent}
+                  />
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Room guide</Text>
+              <View style={styles.summaryBanner}>
                 <Text style={styles.summaryText}>
-                  Keep messages useful, anonymous, and easy to follow. This room
-                  is text-only.
+                  {"👋"} Welcome to {communityName || "this room"}!
+                  Keep messages useful, anonymous, and easy to follow.
                 </Text>
               </View>
 
@@ -186,8 +212,6 @@ const CommunityChatScreen = () => {
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               ) : null}
-
-              <Text style={styles.sectionTitle}>Conversation</Text>
             </View>
           }
           ListEmptyComponent={
@@ -211,36 +235,49 @@ const CommunityChatScreen = () => {
               </View>
             )
           }
-          renderItem={({ item }) => (
-            <View style={styles.messageCard}>
-              <View style={styles.messageHeader}>
-                <View style={styles.senderRow}>
-                  <View style={styles.senderAvatar}>
-                    <Ionicons
-                      name="shield-half-outline"
-                      size={14}
-                      color={COLORS.primary}
-                    />
+          renderItem={({ item }) => {
+            const senderName = item.sender || "Anonymous";
+            return (
+              <>
+                {dateDividerIds.has(item.id) ? (
+                  <Text style={styles.dateDivider}>
+                    {formatDayLabel(item.createdAt)}
+                  </Text>
+                ) : null}
+                <View style={styles.messageRow}>
+                  <View
+                    style={[
+                      styles.senderAvatar,
+                      { backgroundColor: `${getAvatarColor(senderName)}2A` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.senderAvatarText,
+                        { color: getAvatarColor(senderName) },
+                      ]}
+                    >
+                      {getInitial(senderName)}
+                    </Text>
                   </View>
-                  <View>
-                    <Text style={styles.senderText}>
-                      {item.sender || "Anonymous"}
-                    </Text>
-                    <Text style={styles.timeText}>
-                      {new Date(item.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
+                  <View style={styles.messageContent}>
+                    <View style={styles.messageHeader}>
+                      <Text style={styles.senderText}>{senderName}</Text>
+                      <Text style={styles.timeText}>
+                        {new Date(item.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                    <View style={styles.messageBubble}>
+                      <Text style={styles.messageBody}>{item.message}</Text>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.messageTimePill}>
-                  <Text style={styles.messageTimePillText}>Live</Text>
-                </View>
-              </View>
-              <Text style={styles.messageBody}>{item.message}</Text>
-            </View>
-          )}
+              </>
+            );
+          }}
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: true })
           }
@@ -248,29 +285,13 @@ const CommunityChatScreen = () => {
 
         <View
           style={[
-            styles.composerCard,
+            styles.inputRow,
             {
               marginBottom: composerSpacing,
               paddingBottom: Math.max(12, insets.bottom + 6),
             },
           ]}
         >
-          <View style={styles.quickReplyRow}>
-            {QUICK_REPLIES.map((reply) => (
-              <TouchableOpacity
-                key={reply}
-                style={styles.quickReplyChip}
-                onPress={() =>
-                  setInput((current) =>
-                    current ? `${current} ${reply}` : reply,
-                  )
-                }
-              >
-                <Text style={styles.quickReplyText}>{reply}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
               placeholder={token ? "Type a message..." : "Log in again to chat"}
@@ -295,7 +316,6 @@ const CommunityChatScreen = () => {
                 <Ionicons name="send" size={18} color={COLORS.text} />
               )}
             </TouchableOpacity>
-          </View>
         </View>
       </View>
     </ScreenSurface>
@@ -307,32 +327,29 @@ const styles = StyleSheet.create({
   chatLayout: { flex: 1 },
   messageList: { flex: 1 },
   content: { paddingBottom: 16 },
-  headerCard: {
-    backgroundColor: "#08080C",
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    padding: 18,
-    marginBottom: 14,
-  },
   headerTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 18,
   },
   headerCopy: { flex: 1 },
   headerEyebrow: {
-    color: COLORS.gray,
+    color: COLORS.primary,
     ...TYPOGRAPHY.meta,
     marginBottom: 4,
   },
   headerTitle: {
     color: COLORS.text,
     ...TYPOGRAPHY.heading,
-    fontSize: 28,
-    lineHeight: 32,
+    fontSize: 26,
+    lineHeight: 30,
+    marginBottom: 4,
+  },
+  headerMeta: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
   },
   headerIconBtn: {
     width: 36,
@@ -340,67 +357,33 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-  },
-  headerMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  metaChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
-  metaChipText: {
-    color: COLORS.text,
-    ...TYPOGRAPHY.meta,
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  summaryCard: {
-    backgroundColor: "#0D0D11",
+  summaryBanner: {
+    backgroundColor: "rgba(139,61,255,0.08)",
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 18,
   },
-  summaryTitle: { color: COLORS.text, ...TYPOGRAPHY.section, marginBottom: 6 },
   summaryText: {
     color: COLORS.gray,
     ...TYPOGRAPHY.label,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 18,
     padding: 14,
     marginBottom: 16,
   },
   errorText: { color: COLORS.text, ...TYPOGRAPHY.label, flex: 1 },
-  sectionTitle: { color: COLORS.text, ...TYPOGRAPHY.title, marginBottom: 12 },
   loading: { marginTop: 20 },
   emptyCard: {
     alignItems: "center",
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     padding: 24,
   },
   emptyTitle: {
@@ -410,31 +393,36 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   emptyText: { color: COLORS.gray, ...TYPOGRAPHY.label, textAlign: "center" },
-  messageCard: {
-    backgroundColor: "#0F1014",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    padding: 14,
-    marginBottom: 10,
+  dateDivider: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+    textAlign: "center",
+    marginVertical: 12,
   },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 16,
+  },
+  messageContent: { flex: 1 },
   messageHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 6,
   },
-  senderRow: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   senderAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: `${COLORS.primary}18`,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+  },
+  senderAvatarText: {
+    ...TYPOGRAPHY.label,
+    fontWeight: "700",
+    fontSize: 13,
   },
   senderText: {
     color: COLORS.text,
@@ -448,19 +436,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
   },
-  messageTimePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  messageTimePillText: {
-    color: COLORS.gray,
-    ...TYPOGRAPHY.meta,
-    fontSize: 10,
-    lineHeight: 13,
+  messageBubble: {
+    alignSelf: "flex-start",
+    maxWidth: "88%",
+    backgroundColor: "rgba(139,61,255,0.14)",
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   messageBody: {
     color: COLORS.text,
@@ -468,46 +451,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
-  composerCard: {
-    backgroundColor: "rgba(11,11,15,0.98)",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    padding: 12,
-    marginTop: 12,
-  },
-  quickReplyRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  quickReplyChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: `${COLORS.secondary}14`,
-    borderWidth: 1,
-    borderColor: `${COLORS.secondary}22`,
-  },
-  quickReplyText: {
-    color: COLORS.secondary,
-    ...TYPOGRAPHY.meta,
-    fontSize: 10,
-    lineHeight: 13,
-  },
   inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
   input: {
     flex: 1,
     minHeight: 48,
     maxHeight: 112,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.06)",
     color: COLORS.text,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
     ...TYPOGRAPHY.label,
   },
   sendButton: {
