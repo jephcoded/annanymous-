@@ -37,6 +37,31 @@ const ensurePushTokenSchema = async () => {
 
   pushTokenSchemaReady = true;
 };
+
+let passwordResetSchemaReady = false;
+
+const ensurePasswordResetSchema = async () => {
+  if (passwordResetSchemaReady) {
+    return;
+  }
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS password_reset_codes (
+       id BIGSERIAL PRIMARY KEY,
+       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       code TEXT NOT NULL,
+       expires_at TIMESTAMPTZ NOT NULL,
+       used_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  );
+  await db.query(
+    "CREATE INDEX IF NOT EXISTS idx_password_reset_codes_user ON password_reset_codes(user_id, used_at, expires_at DESC)",
+  );
+
+  passwordResetSchemaReady = true;
+};
+
 const {
   hashPassword,
   isAdminWallet,
@@ -131,6 +156,65 @@ exports.changePassword = async (userId, { currentPassword, newPassword }) => {
     nextHash,
     userId,
   ]);
+};
+
+const generateResetCode = () =>
+  String(Math.floor(100000 + Math.random() * 900000));
+
+exports.createPasswordResetCode = async (email) => {
+  await ensurePasswordResetSchema();
+
+  const user = await exports.findByEmail(email);
+  if (!user || user.auth_type !== "password") {
+    return null;
+  }
+
+  const code = generateResetCode();
+  await db.query(
+    `INSERT INTO password_reset_codes (user_id, code, expires_at)
+     VALUES ($1, $2, NOW() + INTERVAL '15 minutes')`,
+    [user.id, code],
+  );
+
+  return { user, code };
+};
+
+exports.resetPasswordWithCode = async ({ email, code, newPassword }) => {
+  await ensurePasswordResetSchema();
+
+  const user = await exports.findByEmail(email);
+  if (!user || user.auth_type !== "password") {
+    const error = new Error("Invalid or expired code");
+    error.status = 400;
+    error.code = "RESET_CODE_INVALID";
+    throw error;
+  }
+
+  const result = await db.query(
+    `SELECT id FROM password_reset_codes
+     WHERE user_id = $1 AND code = $2 AND used_at IS NULL AND expires_at > NOW()
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [user.id, code],
+  );
+  const resetRow = result.rows[0];
+
+  if (!resetRow) {
+    const error = new Error("Invalid or expired code");
+    error.status = 400;
+    error.code = "RESET_CODE_INVALID";
+    throw error;
+  }
+
+  const nextHash = hashPassword(newPassword);
+  await db.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+    nextHash,
+    user.id,
+  ]);
+  await db.query(
+    "UPDATE password_reset_codes SET used_at = NOW() WHERE id = $1",
+    [resetRow.id],
+  );
 };
 
 exports.getAccessContext = async (userId) => {

@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const helpers = require("../utils/helpers");
 const User = require("../models/User");
+const emailService = require("../services/emailService");
 const { isAdminWallet } = require("../utils/admin");
 
 const USER_SESSION_TTL = process.env.USER_SESSION_TTL || "365d";
@@ -223,6 +224,63 @@ exports.changePassword = async (req, res, next) => {
 
     await User.changePassword(req.user.id, { currentPassword, newPassword });
     res.json({ message: "Password updated." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    const genericResponse = {
+      message: "If that email has an account, a reset code has been sent.",
+    };
+
+    if (!email) {
+      return res.json(genericResponse);
+    }
+
+    const result = await User.createPasswordResetCode(email);
+    if (result) {
+      void emailService
+        .sendPasswordResetEmail(result.user.email, result.code)
+        .catch((error) => {
+          console.error("Failed to send password reset email", error);
+        });
+    }
+
+    res.json(genericResponse);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { email, code, newPassword } = req.body || {};
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        error: {
+          code: "RESET_FIELDS_REQUIRED",
+          message: "email, code, and newPassword are required",
+          status: 400,
+        },
+      });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        error: {
+          code: "PASSWORD_TOO_SHORT",
+          message: "New password must be at least 6 characters",
+          status: 400,
+        },
+      });
+    }
+
+    await User.resetPasswordWithCode({ email, code, newPassword });
+    res.json({ message: "Password reset. You can log in now." });
   } catch (error) {
     next(error);
   }

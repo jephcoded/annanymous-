@@ -15,10 +15,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import PressableScale from "../../components/PressableScale";
 import { useWallet } from "../../contexts/WalletContext";
+import { confirmPasswordReset, requestPasswordReset } from "../../services/api";
 import { COLORS, TYPOGRAPHY } from "../../theme";
+import { getFriendlyErrorMessage } from "../../utils/errorMessages";
 
-type AuthView = "entry" | "signup" | "login";
-type FieldName = "name" | "email" | "password";
+type AuthView = "entry" | "signup" | "login" | "forgotRequest" | "forgotReset";
+type FieldName = "name" | "email" | "password" | "code" | "newPassword";
 
 const ConnectWalletScreen = () => {
   const { error, isAuthenticating, signIn, signUp } = useWallet();
@@ -27,26 +29,60 @@ const ConnectWalletScreen = () => {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [focusedField, setFocusedField] = useState<FieldName | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetInfo, setResetInfo] = useState<string | null>(null);
 
-  const isBusy = isAuthenticating;
+  const isBusy = isAuthenticating || resetBusy;
   const isSignup = view === "signup";
   const isLogin = view === "login";
+  const isForgotRequest = view === "forgotRequest";
+  const isForgotReset = view === "forgotReset";
 
   const canSignup =
     displayName.trim().length > 0 &&
     email.trim().length > 0 &&
     password.trim().length >= 6;
   const canLogin = email.trim().length > 0 && password.trim().length > 0;
-  const canSubmit = isSignup ? canSignup : canLogin;
+  const canRequestReset = email.trim().length > 0;
+  const canConfirmReset =
+    resetCode.trim().length > 0 && newPassword.trim().length >= 6;
+  const canSubmit = isSignup
+    ? canSignup
+    : isForgotRequest
+      ? canRequestReset
+      : isForgotReset
+        ? canConfirmReset
+        : canLogin;
 
   const openSignup = () => setView("signup");
   const openLogin = () => setView("login");
-  const goBack = () => setView("entry");
+  const goBack = () => {
+    setResetError(null);
+    setResetInfo(null);
+    if (view === "forgotReset") {
+      setView("forgotRequest");
+      return;
+    }
+    setView(view === "forgotRequest" ? "login" : "entry");
+  };
 
   const handlePrimaryAction = async () => {
     if (isSignup) {
       await signUp({ displayName, email, password });
+      return;
+    }
+
+    if (isForgotRequest) {
+      await handleRequestReset();
+      return;
+    }
+
+    if (isForgotReset) {
+      await handleConfirmReset();
       return;
     }
 
@@ -55,11 +91,50 @@ const ConnectWalletScreen = () => {
     }
   };
 
+  const handleRequestReset = async () => {
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      await requestPasswordReset(email);
+      setResetInfo(`If ${email} has an account, a code was sent to it.`);
+      setView("forgotReset");
+    } catch (requestError) {
+      setResetError(
+        getFriendlyErrorMessage(requestError, "Couldn't send a reset code."),
+      );
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const handleConfirmReset = async () => {
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      await confirmPasswordReset({ email, code: resetCode, newPassword });
+      setResetCode("");
+      setPassword("");
+      setNewPassword("");
+      setResetInfo("Password reset. Log in with your new password.");
+      setView("login");
+    } catch (confirmError) {
+      setResetError(
+        getFriendlyErrorMessage(confirmError, "Couldn't reset your password."),
+      );
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   const primaryLabel = isBusy
     ? "Please wait..."
     : isSignup
       ? "Sign up"
-      : "Log in";
+      : isForgotRequest
+        ? "Send code"
+        : isForgotReset
+          ? "Reset password"
+          : "Log in";
 
   return (
     <KeyboardAvoidingView
@@ -107,13 +182,27 @@ const ConnectWalletScreen = () => {
 
             <View>
               <Text style={styles.sectionTitle}>
-                {isSignup ? "Create your account" : "Welcome back"}
+                {isSignup
+                  ? "Create your account"
+                  : isForgotRequest
+                    ? "Reset your password"
+                    : isForgotReset
+                      ? "Enter the code"
+                      : "Welcome back"}
               </Text>
               <Text style={styles.sectionSubtitle}>
                 {isSignup
                   ? "Join anonymously in seconds."
-                  : "Log in to keep posting."}
+                  : isForgotRequest
+                    ? "We'll email you a 6-digit code."
+                    : isForgotReset
+                      ? `Sent to ${email}. It expires in 15 minutes.`
+                      : "Log in to keep posting."}
               </Text>
+
+              {resetInfo && !isForgotRequest && !isForgotReset ? (
+                <Text style={styles.infoText}>{resetInfo}</Text>
+              ) : null}
 
               <View style={styles.formStack}>
                 {isSignup ? (
@@ -143,68 +232,153 @@ const ConnectWalletScreen = () => {
                   </View>
                 ) : null}
 
-                <View
-                  style={[
-                    styles.inputCard,
-                    focusedField === "email" && styles.inputCardFocused,
-                  ]}
-                >
-                  <Ionicons
-                    name="mail-outline"
-                    size={18}
-                    color={focusedField === "email" ? COLORS.primary : COLORS.gray}
-                  />
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    onFocus={() => setFocusedField("email")}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder="Email"
-                    placeholderTextColor="rgba(247,242,255,0.32)"
-                    style={styles.input}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    editable={!isBusy}
-                  />
-                </View>
+                {!isForgotReset ? (
+                  <View
+                    style={[
+                      styles.inputCard,
+                      focusedField === "email" && styles.inputCardFocused,
+                    ]}
+                  >
+                    <Ionicons
+                      name="mail-outline"
+                      size={18}
+                      color={
+                        focusedField === "email" ? COLORS.primary : COLORS.gray
+                      }
+                    />
+                    <TextInput
+                      value={email}
+                      onChangeText={setEmail}
+                      onFocus={() => setFocusedField("email")}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="Email"
+                      placeholderTextColor="rgba(247,242,255,0.32)"
+                      style={styles.input}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      editable={!isBusy}
+                    />
+                  </View>
+                ) : null}
 
-                <View
-                  style={[
-                    styles.inputCard,
-                    focusedField === "password" && styles.inputCardFocused,
-                  ]}
-                >
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={18}
-                    color={
-                      focusedField === "password" ? COLORS.primary : COLORS.gray
-                    }
-                  />
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    onFocus={() => setFocusedField("password")}
-                    onBlur={() => setFocusedField(null)}
-                    placeholder={
-                      isSignup ? "Password (6+ characters)" : "Password"
-                    }
-                    placeholderTextColor="rgba(247,242,255,0.32)"
-                    style={styles.input}
-                    secureTextEntry
-                    editable={!isBusy}
-                  />
-                </View>
+                {isSignup || isLogin ? (
+                  <View
+                    style={[
+                      styles.inputCard,
+                      focusedField === "password" && styles.inputCardFocused,
+                    ]}
+                  >
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={18}
+                      color={
+                        focusedField === "password"
+                          ? COLORS.primary
+                          : COLORS.gray
+                      }
+                    />
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      onFocus={() => setFocusedField("password")}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder={
+                        isSignup ? "Password (6+ characters)" : "Password"
+                      }
+                      placeholderTextColor="rgba(247,242,255,0.32)"
+                      style={styles.input}
+                      secureTextEntry
+                      editable={!isBusy}
+                    />
+                  </View>
+                ) : null}
+
+                {isForgotReset ? (
+                  <>
+                    <View
+                      style={[
+                        styles.inputCard,
+                        focusedField === "code" && styles.inputCardFocused,
+                      ]}
+                    >
+                      <Ionicons
+                        name="key-outline"
+                        size={18}
+                        color={
+                          focusedField === "code" ? COLORS.primary : COLORS.gray
+                        }
+                      />
+                      <TextInput
+                        value={resetCode}
+                        onChangeText={setResetCode}
+                        onFocus={() => setFocusedField("code")}
+                        onBlur={() => setFocusedField(null)}
+                        placeholder="6-digit code"
+                        placeholderTextColor="rgba(247,242,255,0.32)"
+                        style={styles.input}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        editable={!isBusy}
+                      />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.inputCard,
+                        focusedField === "newPassword" &&
+                          styles.inputCardFocused,
+                      ]}
+                    >
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={18}
+                        color={
+                          focusedField === "newPassword"
+                            ? COLORS.primary
+                            : COLORS.gray
+                        }
+                      />
+                      <TextInput
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                        onFocus={() => setFocusedField("newPassword")}
+                        onBlur={() => setFocusedField(null)}
+                        placeholder="New password (6+ characters)"
+                        placeholderTextColor="rgba(247,242,255,0.32)"
+                        style={styles.input}
+                        secureTextEntry
+                        editable={!isBusy}
+                      />
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.forgotLink}
+                      onPress={() => void handleRequestReset()}
+                      disabled={isBusy}
+                    >
+                      <Text style={styles.forgotLinkText}>Resend code</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
 
                 {isLogin ? (
-                  <TouchableOpacity style={styles.forgotLink}>
+                  <TouchableOpacity
+                    style={styles.forgotLink}
+                    onPress={() => {
+                      setResetError(null);
+                      setResetInfo(null);
+                      setView("forgotRequest");
+                    }}
+                  >
                     <Text style={styles.forgotLinkText}>Forgot password?</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
             </View>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error || resetError ? (
+              <Text style={styles.errorText}>{error || resetError}</Text>
+            ) : null}
 
             <PressableScale
               style={[
@@ -220,17 +394,34 @@ const ConnectWalletScreen = () => {
               <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
             </PressableScale>
 
-            <TouchableOpacity
-              style={styles.switchModeLink}
-              onPress={isSignup ? openLogin : openSignup}
-            >
-              <Text style={styles.loginLinkText}>
-                {isSignup ? "Already have an account? " : "New here? "}
-                <Text style={styles.loginLinkAccent}>
-                  {isSignup ? "Log in" : "Sign up"}
+            {isSignup || isLogin ? (
+              <TouchableOpacity
+                style={styles.switchModeLink}
+                onPress={isSignup ? openLogin : openSignup}
+              >
+                <Text style={styles.loginLinkText}>
+                  {isSignup ? "Already have an account? " : "New here? "}
+                  <Text style={styles.loginLinkAccent}>
+                    {isSignup ? "Log in" : "Sign up"}
+                  </Text>
                 </Text>
-              </Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            ) : null}
+
+            {isForgotRequest || isForgotReset ? (
+              <TouchableOpacity
+                style={styles.switchModeLink}
+                onPress={() => {
+                  setResetError(null);
+                  setResetInfo(null);
+                  setView("login");
+                }}
+              >
+                <Text style={styles.loginLinkText}>
+                  Back to <Text style={styles.loginLinkAccent}>Log in</Text>
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -331,6 +522,11 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     ...TYPOGRAPHY.body,
     marginBottom: 22,
+  },
+  infoText: {
+    color: "#47D16C",
+    ...TYPOGRAPHY.label,
+    marginBottom: 16,
   },
   formStack: {
     gap: 22,
