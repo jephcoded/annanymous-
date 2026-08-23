@@ -17,6 +17,18 @@ router.post(
 );
 router.post("/password/forgot", authLimiter, authController.forgotPassword);
 router.post("/password/reset", authLimiter, authController.resetPassword);
+router.post(
+  "/email/resend",
+  authMiddleware,
+  authLimiter,
+  authController.resendVerificationEmail,
+);
+router.post(
+  "/email/verify",
+  authMiddleware,
+  authLimiter,
+  authController.verifyEmail,
+);
 router.get("/settings", authMiddleware, authController.getSettings);
 router.patch("/settings", authMiddleware, authController.updateSettings);
 router.post(

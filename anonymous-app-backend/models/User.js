@@ -62,6 +62,33 @@ const ensurePasswordResetSchema = async () => {
   passwordResetSchemaReady = true;
 };
 
+let emailVerificationSchemaReady = false;
+
+const ensureEmailVerificationSchema = async () => {
+  if (emailVerificationSchemaReady) {
+    return;
+  }
+
+  await db.query(
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+  );
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS email_verification_codes (
+       id BIGSERIAL PRIMARY KEY,
+       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       code TEXT NOT NULL,
+       expires_at TIMESTAMPTZ NOT NULL,
+       used_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+  );
+  await db.query(
+    "CREATE INDEX IF NOT EXISTS idx_email_verification_codes_user ON email_verification_codes(user_id, used_at, expires_at DESC)",
+  );
+
+  emailVerificationSchemaReady = true;
+};
+
 const {
   hashPassword,
   isAdminWallet,
@@ -217,6 +244,58 @@ exports.resetPasswordWithCode = async ({ email, code, newPassword }) => {
   );
 };
 
+exports.createEmailVerificationCode = async (userId) => {
+  await ensureEmailVerificationSchema();
+
+  const result = await db.query(
+    "SELECT id, email, email_verified_at FROM users WHERE id = $1 LIMIT 1",
+    [userId],
+  );
+  const user = result.rows[0];
+
+  if (!user || !user.email || user.email_verified_at) {
+    return null;
+  }
+
+  const code = generateResetCode();
+  await db.query(
+    `INSERT INTO email_verification_codes (user_id, code, expires_at)
+     VALUES ($1, $2, NOW() + INTERVAL '15 minutes')`,
+    [userId, code],
+  );
+
+  return { email: user.email, code };
+};
+
+exports.verifyEmailWithCode = async (userId, code) => {
+  await ensureEmailVerificationSchema();
+
+  const result = await db.query(
+    `SELECT id FROM email_verification_codes
+     WHERE user_id = $1 AND code = $2 AND used_at IS NULL AND expires_at > NOW()
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId, code],
+  );
+  const verificationRow = result.rows[0];
+
+  if (!verificationRow) {
+    const error = new Error("Invalid or expired code");
+    error.status = 400;
+    error.code = "VERIFICATION_CODE_INVALID";
+    throw error;
+  }
+
+  await db.query(
+    "UPDATE users SET email_verified_at = NOW() WHERE id = $1",
+    [userId],
+  );
+  await db.query(
+    "UPDATE email_verification_codes SET used_at = NOW() WHERE id = $1",
+    [verificationRow.id],
+  );
+};
+
 exports.getAccessContext = async (userId) => {
   const result = await db.query(
     `SELECT
@@ -245,6 +324,8 @@ exports.getAccessContext = async (userId) => {
 };
 
 exports.getProfile = async (userId) => {
+  await ensureEmailVerificationSchema();
+
   const result = await db.query(
     `SELECT
        u.id,
@@ -253,6 +334,7 @@ exports.getProfile = async (userId) => {
        u.display_name AS "displayName",
       u.bio,
       u.auth_type AS "authType",
+       u.email_verified_at IS NOT NULL AS "emailVerified",
        u.created_at AS "createdAt",
        COALESCE((SELECT COUNT(*)::int FROM posts p WHERE p.user_id = u.id), 0) AS "postCount",
        COALESCE((SELECT COUNT(*)::int FROM comments c WHERE c.user_id = u.id), 0) AS "commentCount",
