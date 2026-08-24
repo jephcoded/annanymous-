@@ -70,7 +70,7 @@ function AppChrome({ children, walletUiVisible = false }) {
   return (
     <AppErrorBoundary>
       <SafeAreaProvider>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
         {walletUiVisible && !isExpoGoPreview && isAppKitConfigured
           ? (() => {
               const appKit = getAppKit();
@@ -229,12 +229,7 @@ export default function App() {
   }
 
   const content = (
-    <ToastProvider>
-      <AppShell
-        walletUiVisible={walletUiVisible}
-        adminMode={isAdminWebRoute}
-      />
-    </ToastProvider>
+    <AppShell walletUiVisible={walletUiVisible} adminMode={isAdminWebRoute} />
   );
 
   if (isAdminWebRoute) {
