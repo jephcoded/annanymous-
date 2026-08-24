@@ -654,7 +654,13 @@ const HomeScreen = () => {
         data={filteredPosts}
         keyExtractor={(item) => `${item.id}`}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={loadPosts} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={loadPosts}
+            progressViewOffset={fixedHeaderHeight}
+            tintColor={HOME_COLORS.purple}
+            colors={[HOME_COLORS.purple]}
+          />
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
