@@ -33,6 +33,7 @@ import {
     useWallet,
     WalletProvider,
 } from "./src/contexts/WalletContext";
+import { ToastProvider } from "./src/contexts/ToastContext";
 
 LogBox.ignoreLogs([
   "Possible Unhandled Promise Rejection",
@@ -228,7 +229,12 @@ export default function App() {
   }
 
   const content = (
-    <AppShell walletUiVisible={walletUiVisible} adminMode={isAdminWebRoute} />
+    <ToastProvider>
+      <AppShell
+        walletUiVisible={walletUiVisible}
+        adminMode={isAdminWebRoute}
+      />
+    </ToastProvider>
   );
 
   if (isAdminWebRoute) {

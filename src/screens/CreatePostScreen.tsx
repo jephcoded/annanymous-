@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import ScreenSurface from "../components/ScreenSurface";
+import { useToast } from "../contexts/ToastContext";
 import { useWallet } from "../contexts/WalletContext";
 import { createPost, uploadImage } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
@@ -43,6 +44,7 @@ const CreatePostScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { token } = useWallet();
+  const { showToast } = useToast();
   const { width } = useWindowDimensions();
   const [body, setBody] = useState("");
   const [shareLocation, setShareLocation] = useState(false);
@@ -100,7 +102,7 @@ const CreatePostScreen = () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.45,
         base64: true,
       });
@@ -184,7 +186,7 @@ const CreatePostScreen = () => {
       setPollOptions(["", ""]);
       setCategory("general");
       setTemporaryEnabled(false);
-      setStatusMessage("Post published to the anonymous feed.");
+      showToast("Post published to the anonymous feed.");
       navigation.navigate("Home");
     } catch (error) {
       setStatusMessage(
@@ -330,17 +332,9 @@ const CreatePostScreen = () => {
         {statusMessage ? (
           <View style={styles.statusBanner}>
             <Ionicons
-              name={
-                statusMessage.includes("published")
-                  ? "checkmark-circle-outline"
-                  : "alert-circle-outline"
-              }
+              name="alert-circle-outline"
               size={18}
-              color={
-                statusMessage.includes("published")
-                  ? COLORS.primary
-                  : COLORS.secondary
-              }
+              color={COLORS.secondary}
             />
             <Text style={styles.statusText}>{statusMessage}</Text>
           </View>
