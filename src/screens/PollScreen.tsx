@@ -9,7 +9,6 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import Animatable from "react-native-animatable";
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
 import SectionArt from "../components/SectionArt";
@@ -242,12 +241,7 @@ const PollScreen = () => {
           {visiblePolls.map((poll: FeedPost) => {
             const active = poll.id === selectedPoll?.id;
             return (
-              <Animatable.View
-                key={poll.id}
-                animation="fadeInUp"
-                duration={320}
-                useNativeDriver
-              >
+              <View key={poll.id}>
                 <TouchableOpacity
                   style={[styles.pollChip, active && styles.pollChipActive]}
                   onPress={() => setSelectedPollId(poll.id)}
@@ -263,7 +257,7 @@ const PollScreen = () => {
                     {poll.body}
                   </Text>
                 </TouchableOpacity>
-              </Animatable.View>
+              </View>
             );
           })}
         </ScrollView>

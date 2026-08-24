@@ -12,8 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animatable from "react-native-animatable";
-
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
 import SectionArt from "../components/SectionArt";
@@ -251,12 +249,7 @@ const DiscoverScreen = () => {
                 {DISCOVERY_MODES.map((mode) => {
                   const active = selectedMode === mode.id;
                   return (
-                    <Animatable.View
-                      key={mode.id}
-                      animation="fadeInUp"
-                      duration={360}
-                      useNativeDriver
-                    >
+                    <View key={mode.id}>
                       <TouchableOpacity
                         style={[
                           styles.modeCard,
@@ -278,7 +271,7 @@ const DiscoverScreen = () => {
                           {mode.label}
                         </Text>
                       </TouchableOpacity>
-                    </Animatable.View>
+                    </View>
                   );
                 })}
               </ScrollView>
