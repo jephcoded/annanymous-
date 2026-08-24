@@ -54,6 +54,16 @@ export const sendCommunityMessage = async (
     token,
     body: payload,
   });
+
+export const deleteCommunityMessage = async (
+  token: string,
+  communityId: number,
+  messageId: number,
+) =>
+  request<{ data: { id: number } }>(
+    `/community-messages/${communityId}/messages/${messageId}`,
+    { method: "DELETE", token },
+  );
 // Community types
 export type Community = {
   id: number;
@@ -72,6 +82,8 @@ export type CommunityMember = {
   userId: number;
   isAdmin: boolean;
   status: string;
+  joinedAt: string;
+  displayName: string | null;
 };
 
 // Community API
@@ -127,6 +139,26 @@ export const joinCommunity = async (token: string, communityId: number) =>
     method: "POST",
     token,
   });
+
+export const getCommunityMembers = async (
+  token: string,
+  communityId: number,
+) =>
+  request<{ data: CommunityMember[] }>(
+    `/communities/${communityId}/members`,
+    { token },
+  );
+
+export const updateCommunityMemberStatus = async (
+  token: string,
+  communityId: number,
+  userId: number,
+  status: "active" | "removed",
+) =>
+  request<{ data: CommunityMember }>(
+    `/communities/${communityId}/members/${userId}`,
+    { method: "PATCH", token, body: { status } },
+  );
 
 export type DecentralizedRecord = {
   contentCid?: string | null;

@@ -39,6 +39,7 @@ type CommunityStackParamList = {
     | {
         communityId?: number;
         communityName?: string;
+        isAdmin?: boolean;
       }
     | undefined;
 };
@@ -206,6 +207,7 @@ const AppNavigator = () => {
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarHideOnKeyboard: true,
+            animation: "shift",
             sceneContainerStyle: {
               backgroundColor: "transparent",
             },

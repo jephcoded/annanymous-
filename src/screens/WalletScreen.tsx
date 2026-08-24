@@ -793,7 +793,6 @@ const WalletScreen = () => {
   return (
     <ScreenSurface
       style={[styles.surface, isCompact && styles.surfaceCompact]}
-      bleedTop
     >
       <ScrollView
         stickyHeaderIndices={[0]}
@@ -1811,7 +1810,6 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 16,
-    paddingTop: 24,
     paddingBottom: 140,
   },
   headerCard: {

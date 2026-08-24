@@ -32,7 +32,11 @@ import { getFriendlyErrorMessage } from "../../utils/errorMessages";
 type CommunityStackParamList = {
   Communities: undefined;
   CreateCommunity: undefined;
-  CommunityChat: { communityId: number; communityName?: string };
+  CommunityChat: {
+    communityId: number;
+    communityName?: string;
+    isAdmin?: boolean;
+  };
 };
 
 const COMMUNITY_TABS = ["Groups", "Topics", "People"] as const;
@@ -260,6 +264,7 @@ const CommunitiesScreen = () => {
         navigation.navigate("CommunityChat", {
           communityId: community.id,
           communityName: community.name,
+          isAdmin: community.isAdmin,
         });
         return;
       }
@@ -282,6 +287,7 @@ const CommunitiesScreen = () => {
         navigation.navigate("CommunityChat", {
           communityId: community.id,
           communityName: community.name,
+          isAdmin: community.isAdmin,
         });
       } catch (error) {
         setStatusMessage(
