@@ -92,6 +92,8 @@ const getNotificationIcon = (type: string) => {
       return "newspaper-outline";
     case "community_message":
       return "chatbubbles-outline";
+    case "post_removed":
+      return "warning-outline";
     default:
       return "notifications-outline";
   }
@@ -1036,7 +1038,11 @@ const WalletScreen = () => {
                       <Ionicons
                         name={getNotificationIcon(item.type)}
                         size={16}
-                        color={COLORS.primary}
+                        color={
+                          item.type === "post_removed"
+                            ? "#FFB03B"
+                            : COLORS.primary
+                        }
                       />
                     </View>
                     <View style={styles.alertCopy}>

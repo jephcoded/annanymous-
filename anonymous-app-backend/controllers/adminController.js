@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const AdminMember = require("../models/AdminMember");
+const notificationService = require("../services/notificationService");
+const pushService = require("../services/pushService");
 const {
   isAdminCredentialLoginEnabled,
   isValidAdminCredential,
@@ -494,6 +496,31 @@ exports.deletePost = async (req, res, next) => {
           status: 404,
         },
       });
+    }
+
+    if (post.userId) {
+      void notificationService
+        .notifyUser({
+          userId: post.userId,
+          type: "post_removed",
+          title: "Your post was removed",
+          body: post.deleteReason,
+          meta: { postId: post.id },
+        })
+        .catch((error) => {
+          console.error("Failed to notify user of post removal", error);
+        });
+
+      void pushService
+        .pushToUsers({
+          recipientUserIds: [post.userId],
+          title: "Your post was removed",
+          body: post.deleteReason,
+          meta: { type: "post_removed", postId: post.id },
+        })
+        .catch((error) => {
+          console.error("Failed to push-notify user of post removal", error);
+        });
     }
 
     res.json({ data: post });
