@@ -94,6 +94,14 @@ const getNotificationIcon = (type: string) => {
       return "chatbubbles-outline";
     case "post_removed":
       return "warning-outline";
+    case "comment":
+      return "chatbubble-ellipses-outline";
+    case "vote":
+      return "arrow-up-circle-outline";
+    case "member_approved":
+      return "checkmark-circle-outline";
+    case "member_removed":
+      return "person-remove-outline";
     default:
       return "notifications-outline";
   }
@@ -1038,7 +1046,8 @@ const WalletScreen = () => {
                         name={getNotificationIcon(item.type)}
                         size={16}
                         color={
-                          item.type === "post_removed"
+                          item.type === "post_removed" ||
+                          item.type === "member_removed"
                             ? "#FFB03B"
                             : COLORS.primary
                         }
