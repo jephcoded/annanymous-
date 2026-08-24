@@ -121,3 +121,64 @@ exports.joinByInvite = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.listMembers = async (req, res, next) => {
+  try {
+    const communityId = Number(req.params.communityId);
+    const userId = req.user.id;
+
+    const isMember = await Community.isActiveMember(communityId, userId);
+    if (!isMember) {
+      return res.status(403).json({
+        error: { message: "Not a community member", status: 403 },
+      });
+    }
+
+    const members = await Community.listMembersWithDetails(communityId);
+    res.json({ data: members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateMemberStatus = async (req, res, next) => {
+  try {
+    const communityId = Number(req.params.communityId);
+    const targetUserId = Number(req.params.userId);
+    const requesterId = req.user.id;
+    const { status } = req.body;
+
+    if (!["active", "removed"].includes(status)) {
+      return res.status(400).json({
+        error: {
+          message: "status must be 'active' or 'removed'",
+          status: 400,
+        },
+      });
+    }
+
+    const isAdmin = await Community.isAdmin(communityId, requesterId);
+    if (!isAdmin) {
+      return res.status(403).json({
+        error: { message: "Only a room admin can do this", status: 403 },
+      });
+    }
+
+    const membership = await Community.findMembership(
+      communityId,
+      targetUserId,
+    );
+    if (!membership) {
+      return res.status(404).json({
+        error: { message: "Member not found", status: 404 },
+      });
+    }
+
+    const updated = await Community.updateMembership(membership.id, {
+      status,
+    });
+    res.json({ data: updated });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -96,7 +96,13 @@ exports.updateMembership = async (membershipId, updates) => {
        status = COALESCE($2, status),
        is_admin = COALESCE($3, is_admin)
      WHERE id = $1
-     RETURNING *`,
+     RETURNING
+       id,
+       community_id AS "communityId",
+       user_id AS "userId",
+       is_admin AS "isAdmin",
+       status,
+       joined_at AS "joinedAt"`,
     [
       membershipId,
       updates.status ?? null,
@@ -168,6 +174,24 @@ exports.getCommunityByInvite = async (inviteCode) => {
 exports.getMembers = async (communityId) => {
   const result = await db.query(
     `SELECT * FROM community_members WHERE community_id = $1 AND status = 'active'`,
+    [communityId],
+  );
+  return result.rows;
+};
+
+exports.listMembersWithDetails = async (communityId) => {
+  const result = await db.query(
+    `SELECT
+       cm.id,
+       cm.user_id AS "userId",
+       cm.is_admin AS "isAdmin",
+       cm.status,
+       cm.joined_at AS "joinedAt",
+       u.display_name AS "displayName"
+     FROM community_members cm
+     LEFT JOIN users u ON u.id = cm.user_id
+     WHERE cm.community_id = $1 AND cm.status != 'removed'
+     ORDER BY (cm.status = 'pending') DESC, cm.joined_at ASC`,
     [communityId],
   );
   return result.rows;

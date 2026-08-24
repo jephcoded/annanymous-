@@ -14,4 +14,11 @@ router.get(
   communityMessageController.getMessages,
 );
 
+// Delete a message (sender or room admin only)
+router.delete(
+  "/:communityId/messages/:messageId",
+  auth,
+  communityMessageController.deleteMessage,
+);
+
 module.exports = router;

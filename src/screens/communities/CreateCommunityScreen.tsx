@@ -241,9 +241,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.text, ...TYPOGRAPHY.section, marginBottom: 12 },
   input: {
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}18`,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     color: COLORS.text,
     paddingHorizontal: 14,
     paddingVertical: 13,
@@ -277,9 +275,7 @@ const styles = StyleSheet.create({
   },
   promptChip: {
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: `${COLORS.secondary}22`,
-    backgroundColor: `${COLORS.secondary}12`,
+    backgroundColor: `${COLORS.secondary}14`,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },

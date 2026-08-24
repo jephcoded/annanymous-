@@ -163,7 +163,7 @@ const DiscoverScreen = () => {
   const activeMode = DISCOVERY_MODES.find((mode) => mode.id === selectedMode);
 
   return (
-    <ScreenSurface style={styles.surface} bleedTop>
+    <ScreenSurface style={styles.surface}>
       <View style={styles.heroDock}>
         <HeroHeading
           title="Discover"
@@ -556,7 +556,6 @@ const styles = StyleSheet.create({
   },
   heroDock: {
     paddingHorizontal: 16,
-    paddingTop: 24,
     marginBottom: 4,
   },
   content: {

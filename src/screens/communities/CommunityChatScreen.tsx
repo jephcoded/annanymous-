@@ -5,6 +5,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
+    Modal,
     RefreshControl,
     StyleSheet,
     Text,
@@ -17,9 +18,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenSurface from "../../components/ScreenSurface";
 import { useWallet } from "../../contexts/WalletContext";
 import {
+    CommunityMember,
     CommunityMessage,
+    deleteCommunityMessage,
+    getCommunityMembers,
     getCommunityMessages,
+    getMe,
     sendCommunityMessage,
+    updateCommunityMemberStatus,
 } from "../../services/api";
 import { COLORS, TYPOGRAPHY } from "../../theme";
 import { getFriendlyErrorMessage } from "../../utils/errorMessages";
@@ -27,6 +33,7 @@ import { getFriendlyErrorMessage } from "../../utils/errorMessages";
 type CommunityChatRouteParams = {
   communityId?: number;
   communityName?: string;
+  isAdmin?: boolean;
 };
 
 const AVATAR_PALETTE = [
@@ -72,7 +79,7 @@ const formatDayLabel = (isoDate: string) => {
 
 const CommunityChatScreen = () => {
   const route = useRoute();
-  const { communityId, communityName } =
+  const { communityId, communityName, isAdmin } =
     (route.params as CommunityChatRouteParams) || {};
   const { token } = useWallet();
   const insets = useSafeAreaInsets();
@@ -83,7 +90,26 @@ const CommunityChatScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<number | null>(
+    null,
+  );
+  const [membersVisible, setMembersVisible] = useState(false);
+  const [members, setMembers] = useState<CommunityMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [memberActionId, setMemberActionId] = useState<number | null>(null);
   const flatListRef = useRef<FlatList<CommunityMessage>>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) {
+        return;
+      }
+      getMe(token)
+        .then((response) => setCurrentUserId(response.data.profile.id))
+        .catch(() => undefined);
+    }, [token]),
+  );
 
   const fetchMessages = useCallback(async () => {
     if (!token || !communityId) {
@@ -140,6 +166,84 @@ const CommunityChatScreen = () => {
     }
   }, [communityId, input, token]);
 
+  const handleDeleteMessage = useCallback(
+    async (messageId: number) => {
+      if (!token || !communityId) {
+        return;
+      }
+
+      setDeletingMessageId(messageId);
+      try {
+        await deleteCommunityMessage(token, communityId, messageId);
+        setMessages((current) =>
+          current.filter((message) => message.id !== messageId),
+        );
+      } catch (err) {
+        setError(getFriendlyErrorMessage(err, "Failed to delete message."));
+      } finally {
+        setDeletingMessageId(null);
+      }
+    },
+    [communityId, token],
+  );
+
+  const fetchMembers = useCallback(async () => {
+    if (!token || !communityId) {
+      return;
+    }
+
+    setMembersLoading(true);
+    try {
+      const response = await getCommunityMembers(token, communityId);
+      setMembers(response.data);
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, "Failed to load members."));
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [communityId, token]);
+
+  const openMembers = useCallback(() => {
+    setMembersVisible(true);
+    void fetchMembers();
+  }, [fetchMembers]);
+
+  const handleMemberAction = useCallback(
+    async (memberUserId: number, status: "active" | "removed") => {
+      if (!token || !communityId) {
+        return;
+      }
+
+      setMemberActionId(memberUserId);
+      try {
+        await updateCommunityMemberStatus(
+          token,
+          communityId,
+          memberUserId,
+          status,
+        );
+        if (status === "removed") {
+          setMembers((current) =>
+            current.filter((member) => member.userId !== memberUserId),
+          );
+        } else {
+          setMembers((current) =>
+            current.map((member) =>
+              member.userId === memberUserId
+                ? { ...member, status }
+                : member,
+            ),
+          );
+        }
+      } catch (err) {
+        setError(getFriendlyErrorMessage(err, "Failed to update member."));
+      } finally {
+        setMemberActionId(null);
+      }
+    },
+    [communityId, token],
+  );
+
   const composerSpacing = tabBarHeight + 8;
 
   const dateDividerIds = useMemo(() => {
@@ -183,16 +287,28 @@ const CommunityChatScreen = () => {
                     {token ? "Text-only room" : "Session needed"}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.headerIconBtn}
-                  onPress={fetchMessages}
-                >
-                  <Ionicons
-                    name="refresh-outline"
-                    size={18}
-                    color={COLORS.accent}
-                  />
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    onPress={openMembers}
+                  >
+                    <Ionicons
+                      name="people-outline"
+                      size={18}
+                      color={COLORS.accent}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.headerIconBtn}
+                    onPress={fetchMessages}
+                  >
+                    <Ionicons
+                      name="refresh-outline"
+                      size={18}
+                      color={COLORS.accent}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.summaryBanner}>
@@ -237,6 +353,8 @@ const CommunityChatScreen = () => {
           }
           renderItem={({ item }) => {
             const senderName = item.sender || "Anonymous";
+            const canDelete =
+              Boolean(isAdmin) || item.userId === currentUserId;
             return (
               <>
                 {dateDividerIds.has(item.id) ? (
@@ -269,6 +387,26 @@ const CommunityChatScreen = () => {
                           minute: "2-digit",
                         })}
                       </Text>
+                      {canDelete ? (
+                        <TouchableOpacity
+                          style={styles.messageDeleteBtn}
+                          onPress={() => void handleDeleteMessage(item.id)}
+                          disabled={deletingMessageId === item.id}
+                        >
+                          {deletingMessageId === item.id ? (
+                            <ActivityIndicator
+                              size="small"
+                              color={COLORS.gray}
+                            />
+                          ) : (
+                            <Ionicons
+                              name="trash-outline"
+                              size={14}
+                              color={COLORS.gray}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                     <View style={styles.messageBubble}>
                       <Text style={styles.messageBody}>{item.message}</Text>
@@ -318,6 +456,110 @@ const CommunityChatScreen = () => {
             </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={membersVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMembersVisible(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setMembersVisible(false)}
+          />
+          <View
+            style={[
+              styles.membersSheet,
+              { paddingBottom: Math.max(18, insets.bottom + 10) },
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Members</Text>
+              <TouchableOpacity onPress={() => setMembersVisible(false)}>
+                <Ionicons name="close" size={20} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {membersLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={COLORS.primary}
+                style={styles.loading}
+              />
+            ) : (
+              <FlatList
+                data={members}
+                keyExtractor={(member) => member.id.toString()}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>No members yet.</Text>
+                }
+                renderItem={({ item: member }) => (
+                  <View style={styles.memberRow}>
+                    <View style={styles.memberCopy}>
+                      <Text style={styles.memberName}>
+                        {member.displayName || "Anonymous"}
+                        {member.isAdmin ? "  ·  Admin" : ""}
+                      </Text>
+                      <Text style={styles.memberStatus}>
+                        {member.status === "pending"
+                          ? "Waiting for approval"
+                          : "Active"}
+                      </Text>
+                    </View>
+                    {isAdmin && !member.isAdmin ? (
+                      memberActionId === member.userId ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.gray}
+                        />
+                      ) : (
+                        <View style={styles.memberActions}>
+                          {member.status === "pending" ? (
+                            <TouchableOpacity
+                              style={styles.memberApproveBtn}
+                              onPress={() =>
+                                void handleMemberAction(
+                                  member.userId,
+                                  "active",
+                                )
+                              }
+                            >
+                              <Ionicons
+                                name="checkmark"
+                                size={16}
+                                color="#47D16C"
+                              />
+                            </TouchableOpacity>
+                          ) : null}
+                          <TouchableOpacity
+                            style={styles.memberRemoveBtn}
+                            onPress={() =>
+                              void handleMemberAction(
+                                member.userId,
+                                "removed",
+                              )
+                            }
+                          >
+                            <Ionicons
+                              name="close"
+                              size={16}
+                              color="#F87171"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )
+                    ) : null}
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScreenSurface>
   );
 };
@@ -476,6 +718,78 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
   },
   sendButtonDisabled: { opacity: 0.55 },
+  headerActions: { flexDirection: "row", gap: 8 },
+  messageDeleteBtn: {
+    marginLeft: "auto",
+    padding: 4,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  membersSheet: {
+    maxHeight: "70%",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: "#0B0A10",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sheetTitle: { color: COLORS.text, ...TYPOGRAPHY.section },
+  memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  memberCopy: { flex: 1 },
+  memberName: {
+    color: COLORS.text,
+    ...TYPOGRAPHY.label,
+    marginBottom: 2,
+  },
+  memberStatus: {
+    color: COLORS.gray,
+    ...TYPOGRAPHY.meta,
+  },
+  memberActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  memberApproveBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(71,209,108,0.14)",
+  },
+  memberRemoveBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(248,113,113,0.12)",
+  },
 });
 
 export default CommunityChatScreen;

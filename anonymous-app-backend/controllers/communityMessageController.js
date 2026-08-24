@@ -58,3 +58,34 @@ exports.getMessages = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.deleteMessage = async (req, res, next) => {
+  try {
+    const { communityId, messageId } = req.params;
+    const userId = req.user.id;
+
+    const targetMessage = await CommunityMessage.getMessageById(messageId);
+    if (!targetMessage || String(targetMessage.communityId) !== String(communityId)) {
+      return res.status(404).json({
+        error: { message: "Message not found", status: 404 },
+      });
+    }
+
+    const isOwnMessage = String(targetMessage.userId) === String(userId);
+    const isAdmin = await Community.isAdmin(communityId, userId);
+
+    if (!isOwnMessage && !isAdmin) {
+      return res.status(403).json({
+        error: {
+          message: "Only the sender or a room admin can delete this message",
+          status: 403,
+        },
+      });
+    }
+
+    await CommunityMessage.deleteMessage(messageId);
+    res.json({ data: { id: Number(messageId) } });
+  } catch (error) {
+    next(error);
+  }
+};

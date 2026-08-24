@@ -17,4 +17,18 @@ router.post("/invite", auth, communityController.createInvite);
 // Join a community by invite link
 router.post("/join", auth, communityController.joinByInvite);
 
+// List members (including pending) -- any active member can view
+router.get(
+  "/:communityId/members",
+  auth,
+  communityController.listMembers,
+);
+
+// Approve or remove a member -- admin only
+router.patch(
+  "/:communityId/members/:userId",
+  auth,
+  communityController.updateMemberStatus,
+);
+
 module.exports = router;
