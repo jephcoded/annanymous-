@@ -451,6 +451,29 @@ exports.banUser = async (req, res, next) => {
       });
     }
 
+    void notificationService
+      .notifyUser({
+        userId: user.id,
+        type: "account_banned",
+        title: "Your account was banned",
+        body: user.bannedReason,
+        meta: {},
+      })
+      .catch((error) => {
+        console.error("Failed to notify user of ban", error);
+      });
+
+    void pushService
+      .pushToUsers({
+        recipientUserIds: [user.id],
+        title: "Your account was banned",
+        body: user.bannedReason,
+        meta: { type: "account_banned" },
+      })
+      .catch((error) => {
+        console.error("Failed to push-notify user of ban", error);
+      });
+
     res.json({ data: user });
   } catch (error) {
     next(error);
@@ -473,6 +496,18 @@ exports.unbanUser = async (req, res, next) => {
         },
       });
     }
+
+    void notificationService
+      .notifyUser({
+        userId: user.id,
+        type: "account_unbanned",
+        title: "Your account was reinstated",
+        body: "You can post and comment again.",
+        meta: {},
+      })
+      .catch((error) => {
+        console.error("Failed to notify user of unban", error);
+      });
 
     res.json({ data: user });
   } catch (error) {

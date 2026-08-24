@@ -1,6 +1,8 @@
 // Community controller for handling community creation, invites, and membership
 const Community = require("../models/Community");
 const { nanoid } = require("nanoid");
+const notificationService = require("../services/notificationService");
+const pushService = require("../services/pushService");
 
 exports.getCommunities = async (req, res, next) => {
   try {
@@ -177,6 +179,47 @@ exports.updateMemberStatus = async (req, res, next) => {
     const updated = await Community.updateMembership(membership.id, {
       status,
     });
+
+    const community = await Community.getById(communityId);
+    const roomName = community?.name || "the room";
+
+    if (status === "active") {
+      void notificationService
+        .notifyUser({
+          userId: targetUserId,
+          type: "member_approved",
+          title: "You're in!",
+          body: `Your request to join ${roomName} was approved.`,
+          meta: { communityId },
+        })
+        .catch((error) => {
+          console.error("Failed to notify approved member", error);
+        });
+
+      void pushService
+        .pushToUsers({
+          recipientUserIds: [targetUserId],
+          title: "You're in!",
+          body: `Your request to join ${roomName} was approved.`,
+          meta: { type: "member_approved", communityId },
+        })
+        .catch((error) => {
+          console.error("Failed to push-notify approved member", error);
+        });
+    } else {
+      void notificationService
+        .notifyUser({
+          userId: targetUserId,
+          type: "member_removed",
+          title: "Removed from a room",
+          body: `You were removed from ${roomName}.`,
+          meta: { communityId },
+        })
+        .catch((error) => {
+          console.error("Failed to notify removed member", error);
+        });
+    }
+
     res.json({ data: updated });
   } catch (error) {
     next(error);
