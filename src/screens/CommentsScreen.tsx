@@ -13,7 +13,6 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import Animatable from "react-native-animatable";
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
 import SectionArt from "../components/SectionArt";
@@ -357,12 +356,7 @@ const CommentsScreen = () => {
               {posts.map((post: FeedPost) => {
                 const active = post.id === selectedPostId;
                 return (
-                  <Animatable.View
-                    key={post.id}
-                    animation="fadeInUp"
-                    duration={320}
-                    useNativeDriver
-                  >
+                  <View key={post.id}>
                     <TouchableOpacity
                       style={[styles.postChip, active && styles.postChipActive]}
                       onPress={() => loadThread(post.id)}
@@ -384,7 +378,7 @@ const CommentsScreen = () => {
                         {post.body}
                       </Text>
                     </TouchableOpacity>
-                  </Animatable.View>
+                  </View>
                 );
               })}
             </ScrollView>

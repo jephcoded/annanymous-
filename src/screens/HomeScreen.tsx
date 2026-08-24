@@ -25,7 +25,6 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
-import Animatable from "react-native-animatable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenSurface from "../components/ScreenSurface";
@@ -1008,17 +1007,11 @@ const HomeScreen = () => {
                     </View>
                   )
                 }
-                renderItem={({ item, index }) => {
+                renderItem={({ item }) => {
                   const authorLabel = item.authorName?.trim() || "u.comment";
                   const avatarColor = getAvatarColor(authorLabel);
                   return (
-                    <Animatable.View
-                      animation="fadeInUp"
-                      duration={280}
-                      delay={Math.min(index * 40, 200)}
-                      useNativeDriver
-                      style={styles.commentRow}
-                    >
+                    <View style={styles.commentRow}>
                       <View
                         style={[
                           styles.commentAvatar,
@@ -1045,7 +1038,7 @@ const HomeScreen = () => {
                           {formatRelativeTime(item.createdAt)} ago
                         </Text>
                       </View>
-                    </Animatable.View>
+                    </View>
                   );
                 }}
               />
