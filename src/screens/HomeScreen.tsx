@@ -26,7 +26,9 @@ import {
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { io, Socket } from "socket.io-client";
 
+import { API_ORIGIN } from "../config/api";
 import ScreenSurface from "../components/ScreenSurface";
 import { FeedSkeleton } from "../components/Skeleton";
 import { useWallet } from "../contexts/WalletContext";
@@ -112,6 +114,8 @@ const HomeScreen = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [hasNewPosts, setHasNewPosts] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
@@ -201,6 +205,26 @@ const HomeScreen = () => {
 
   useEffect(() => {
     loadPosts();
+  }, [loadPosts]);
+
+  useEffect(() => {
+    const socket: Socket = io(`${API_ORIGIN}/feed`, {
+      transports: ["websocket"],
+    });
+
+    socket.on("feed:new-post", () => {
+      setHasNewPosts(true);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const dismissNewPostsBanner = useCallback(() => {
+    setHasNewPosts(false);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    void loadPosts();
   }, [loadPosts]);
 
   useEffect(() => {
@@ -688,7 +712,22 @@ const HomeScreen = () => {
         </View>
       </View>
 
+      {hasNewPosts ? (
+        <TouchableOpacity
+          style={[
+            styles.newPostsBanner,
+            { top: fixedHeaderHeight + 8 },
+          ]}
+          onPress={dismissNewPostsBanner}
+          activeOpacity={0.9}
+        >
+          <Ionicons name="arrow-up" size={14} color="#FFFFFF" />
+          <Text style={styles.newPostsBannerText}>New posts</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <FlatList
+        ref={flatListRef}
         data={filteredPosts}
         keyExtractor={(item) => `${item.id}`}
         refreshControl={
@@ -1288,6 +1327,28 @@ const styles = StyleSheet.create({
   loadMoreFooter: {
     paddingVertical: 24,
     alignItems: "center",
+  },
+  newPostsBanner: {
+    position: "absolute",
+    alignSelf: "center",
+    zIndex: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    backgroundColor: HOME_COLORS.purple,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  newPostsBannerText: {
+    color: "#FFFFFF",
+    ...TYPOGRAPHY.label,
+    fontSize: 12,
   },
   emptyTitle: {
     color: HOME_COLORS.text,
