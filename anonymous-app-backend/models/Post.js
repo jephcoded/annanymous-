@@ -26,6 +26,7 @@ const buildListQuery = ({
   trending = false,
   userId,
   mine = false,
+  search,
 }) => {
   const params = [];
   const currentUserIdExpression = userId ? `$${params.push(userId)}` : "NULL";
@@ -142,6 +143,10 @@ const buildListQuery = ({
   if (mine && userId) {
     filters.push(`p.user_id = ${currentUserIdExpression}`);
   }
+  if (search) {
+    params.push(`%${search}%`);
+    filters.push(`p.body ILIKE $${params.length}`);
+  }
 
   if (filters.length) {
     query += ` WHERE ${filters.join(" AND ")}`;
@@ -167,6 +172,7 @@ exports.list = async ({
   trending = false,
   userId = null,
   mine = false,
+  search,
 }) => {
   const { query, params } = buildListQuery({
     cursor,
@@ -180,6 +186,7 @@ exports.list = async ({
     trending,
     userId,
     mine,
+    search,
   });
   const result = await db.query(query, params);
   return result.rows;
