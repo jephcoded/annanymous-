@@ -18,6 +18,7 @@ import { buildActionRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
 import { filterPostsForSettings } from "../utils/contentPreferences";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
+import { hapticTap } from "../utils/haptics";
 
 const COLOR_STOPS = [COLORS.primary, COLORS.secondary, "#6B7280", "#52525B"];
 
@@ -128,6 +129,7 @@ const PollScreen = () => {
         return;
       }
 
+      hapticTap();
       try {
         await voteOnPoll(token, selectedPoll.id, optionId, buildActionRecord());
         await loadPolls();

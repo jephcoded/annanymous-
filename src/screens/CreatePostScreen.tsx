@@ -22,6 +22,7 @@ import { createPost, uploadImage } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
 import { COLORS, TYPOGRAPHY } from "../theme";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
+import { hapticSuccess } from "../utils/haptics";
 
 const BODY_LIMIT = 500;
 type Category =
@@ -186,6 +187,7 @@ const CreatePostScreen = () => {
       setPollOptions(["", ""]);
       setCategory("general");
       setTemporaryEnabled(false);
+      hapticSuccess();
       showToast("Post published to the anonymous feed.");
       navigation.navigate("Home");
     } catch (error) {

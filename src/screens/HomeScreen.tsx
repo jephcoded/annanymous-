@@ -28,6 +28,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenSurface from "../components/ScreenSurface";
+import { FeedSkeleton } from "../components/Skeleton";
 import { useWallet } from "../contexts/WalletContext";
 import {
     CommentItem,
@@ -44,6 +45,7 @@ import { buildContentRecord } from "../services/decentralized";
 import { TYPOGRAPHY } from "../theme";
 import { filterPostsForSettings } from "../utils/contentPreferences";
 import { getFriendlyErrorMessage } from "../utils/errorMessages";
+import { hapticSelect, hapticTap } from "../utils/haptics";
 import { loadSavedPostIds, persistSavedPostIds } from "../utils/savedPosts";
 
 const HOME_COLORS = {
@@ -142,6 +144,7 @@ const HomeScreen = () => {
   }, []);
 
   const toggleSavePost = useCallback(async (post: FeedPost) => {
+    hapticSelect();
     setSavedPostIds((current) => {
       const next = new Set(current);
       if (next.has(post.id)) {
@@ -348,6 +351,7 @@ const HomeScreen = () => {
         return;
       }
 
+      hapticTap();
       setLikingPostIds((current) => ({ ...current, [postId]: true }));
       try {
         const targetPost = posts.find((post) => post.id === postId);
@@ -458,6 +462,7 @@ const HomeScreen = () => {
       return;
     }
 
+    hapticTap();
     setCommentSubmitting(true);
     try {
       const response = await createComment(
@@ -705,10 +710,7 @@ const HomeScreen = () => {
         }
         ListEmptyComponent={
           refreshing ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator size="small" color={HOME_COLORS.purple} />
-              <Text style={styles.emptyTitle}>Loading feed...</Text>
-            </View>
+            <FeedSkeleton />
           ) : (
             <View style={styles.emptyState}>
               <Ionicons
