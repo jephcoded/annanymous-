@@ -465,6 +465,7 @@ export const getFeed = async (params?: {
   contentMode?: string;
   trending?: boolean;
   mine?: boolean;
+  search?: string;
   token?: string;
 }) => {
   const query = new URLSearchParams();
@@ -497,6 +498,9 @@ export const getFeed = async (params?: {
   }
   if (params?.mine) {
     query.set("mine", "true");
+  }
+  if (params?.search) {
+    query.set("search", params.search);
   }
 
   const suffix = query.toString() ? `?${query.toString()}` : "";

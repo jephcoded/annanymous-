@@ -130,6 +130,8 @@ const HomeScreen = () => {
   const [activeFeedTab, setActiveFeedTab] = useState<FeedTab>("For you");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FeedPost[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const commentsCacheRef = useRef<Record<number, CommentItem[]>>({});
   const activeCommentPostIdRef = useRef<number | null>(null);
 
@@ -540,28 +542,32 @@ const HomeScreen = () => {
     }
   }, [activeFeedTab, posts, settings]);
 
-  const filteredPosts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
+  useEffect(() => {
+    const query = searchQuery.trim();
     if (!query) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    const timeoutId = setTimeout(() => {
+      getFeed({ search: query, limit: 30, token: token || undefined })
+        .then((response) => setSearchResults(response.data))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 350);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, token]);
+
+  const filteredPosts = useMemo(() => {
+    if (!searchQuery.trim()) {
       return displayPosts;
     }
 
-    return displayPosts.filter((item) => {
-      const searchParts = [
-        item.body,
-        item.category,
-        item.cityTag,
-        item.campusTag,
-        ...(item.hashtags || []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return searchParts.includes(query);
-    });
-  }, [displayPosts, searchQuery]);
+    return filterPostsForSettings(searchResults || [], settings);
+  }, [displayPosts, searchQuery, searchResults, settings]);
 
   return (
     <ScreenSurface style={styles.surface} bleedTop>
@@ -709,7 +715,7 @@ const HomeScreen = () => {
           ) : null
         }
         ListEmptyComponent={
-          refreshing ? (
+          refreshing || searchLoading ? (
             <FeedSkeleton />
           ) : (
             <View style={styles.emptyState}>
