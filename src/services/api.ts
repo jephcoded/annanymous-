@@ -456,6 +456,7 @@ export const registerPushToken = async (
 
 export const getFeed = async (params?: {
   limit?: number;
+  cursor?: number | string | null;
   pollsOnly?: boolean;
   category?: string;
   hashtag?: string;
@@ -469,6 +470,9 @@ export const getFeed = async (params?: {
   const query = new URLSearchParams();
   if (params?.limit) {
     query.set("limit", `${params.limit}`);
+  }
+  if (params?.cursor) {
+    query.set("cursor", `${params.cursor}`);
   }
   if (params?.pollsOnly) {
     query.set("pollsOnly", "true");

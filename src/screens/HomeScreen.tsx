@@ -107,6 +107,9 @@ const HomeScreen = () => {
   const { width } = useWindowDimensions();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
@@ -157,6 +160,8 @@ const HomeScreen = () => {
     try {
       const response = await getFeed({ limit: 12, token: token || undefined });
       setPosts(response.data);
+      setCursor(response.paging?.cursor ?? null);
+      setHasMore(Boolean(response.paging?.hasMore));
       setLoadError(null);
     } catch (error) {
       setLoadError(
@@ -166,6 +171,28 @@ const HomeScreen = () => {
       setRefreshing(false);
     }
   }, [token]);
+
+  const loadMorePosts = useCallback(async () => {
+    if (loadingMore || refreshing || !hasMore || !cursor) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const response = await getFeed({
+        limit: 12,
+        cursor,
+        token: token || undefined,
+      });
+      setPosts((current) => [...current, ...response.data]);
+      setCursor(response.paging?.cursor ?? null);
+      setHasMore(Boolean(response.paging?.hasMore));
+    } catch {
+      // Silent: pull-to-refresh remains available if this fails.
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [cursor, hasMore, loadingMore, refreshing, token]);
 
   useEffect(() => {
     loadPosts();
@@ -663,10 +690,19 @@ const HomeScreen = () => {
           />
         }
         showsVerticalScrollIndicator={false}
+        onEndReached={() => void loadMorePosts()}
+        onEndReachedThreshold={0.4}
         contentContainerStyle={[
           styles.content,
           { paddingTop: fixedHeaderHeight },
         ]}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.loadMoreFooter}>
+              <ActivityIndicator size="small" color={HOME_COLORS.purple} />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           refreshing ? (
             <View style={styles.emptyState}>
@@ -1240,6 +1276,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
     paddingVertical: 54,
+  },
+  loadMoreFooter: {
+    paddingVertical: 24,
+    alignItems: "center",
   },
   emptyTitle: {
     color: HOME_COLORS.text,
