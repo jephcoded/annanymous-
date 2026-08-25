@@ -1,6 +1,7 @@
 const Post = require("../models/Post");
 const pushService = require("../services/pushService");
 const trendingService = require("../services/trendingService");
+const notificationService = require("../services/notificationService");
 
 const formatCursor = (rows) => (rows.length ? rows[rows.length - 1].id : null);
 
@@ -61,6 +62,7 @@ exports.createPost = async (req, res, next) => {
     };
     const post = await Post.create(payload);
     trendingService.enqueue(post.id);
+    notificationService.emitPost(post);
 
     void pushService
       .notifyNewPost({
