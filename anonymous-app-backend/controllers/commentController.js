@@ -5,7 +5,10 @@ const pushService = require("../services/pushService");
 
 exports.listRecent = async (req, res, next) => {
   try {
-    const comments = await Comment.listRecent(Number(req.query.limit) || 20);
+    const comments = await Comment.listRecent(
+      Number(req.query.limit) || 20,
+      req.user?.id || null,
+    );
     res.json({ data: comments });
   } catch (error) {
     next(error);
@@ -18,6 +21,7 @@ exports.listByPost = async (req, res, next) => {
       req.params.postId,
       req.query.cursor,
       Number(req.query.limit) || 30,
+      req.user?.id || null,
     );
     res.json({ data: comments });
   } catch (error) {

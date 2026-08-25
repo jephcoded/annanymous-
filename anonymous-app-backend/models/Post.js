@@ -60,7 +60,11 @@ const buildListQuery = ({
     p.media_url AS "mediaUrl",
     p.created_at AS "createdAt",
     p.user_id AS "userId",
-    u.display_name AS "authorName",
+    CASE
+      WHEN ${currentUserIdExpression} IS NOT NULL AND p.user_id = ${currentUserIdExpression}
+        THEN u.display_name
+      ELSE NULL
+    END AS "authorName",
     CASE
       WHEN ${currentUserIdExpression} IS NULL THEN FALSE
       ELSE p.user_id = ${currentUserIdExpression}
