@@ -3,7 +3,6 @@ import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import HeroHeading from "../components/HeroHeading";
 import ScreenSurface from "../components/ScreenSurface";
+import { FeedSkeleton } from "../components/Skeleton";
 import SectionArt from "../components/SectionArt";
 import { useWallet } from "../contexts/WalletContext";
 import { FeedPost, getFeed } from "../services/api";
@@ -438,10 +438,7 @@ const DiscoverScreen = () => {
         }
         ListEmptyComponent={
           refreshing ? (
-            <View style={styles.emptyCard}>
-              <ActivityIndicator size="small" color={COLORS.primary} />
-              <Text style={styles.emptyTitle}>Loading discover feed...</Text>
-            </View>
+            <FeedSkeleton count={3} />
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons
