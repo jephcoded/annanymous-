@@ -302,6 +302,18 @@ CREATE TABLE IF NOT EXISTS email_verification_codes (
 CREATE INDEX IF NOT EXISTS idx_email_verification_codes_user
   ON email_verification_codes(user_id, used_at, expires_at DESC);
 
+-- Emoji reactions: one reaction per user per post, switching overwrites
+CREATE TABLE IF NOT EXISTS post_reactions (
+  id BIGSERIAL PRIMARY KEY,
+  post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (post_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON post_reactions(post_id);
+
 -- Helpful indexes for scrolling feeds + joins
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at);

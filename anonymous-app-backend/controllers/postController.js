@@ -116,6 +116,47 @@ exports.flagPost = async (req, res, next) => {
   }
 };
 
+exports.setReaction = async (req, res, next) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({
+        error: { code: "AUTH_REQUIRED", message: "Log in to react", status: 401 },
+      });
+    }
+
+    await Post.setReaction({
+      postId: req.params.postId,
+      userId: req.user.id,
+      emoji: req.body.emoji,
+    });
+
+    const post = await Post.findById(req.params.postId, req.user.id);
+    res.json({ data: post });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.removeReaction = async (req, res, next) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({
+        error: { code: "AUTH_REQUIRED", message: "Log in to react", status: 401 },
+      });
+    }
+
+    await Post.removeReaction({
+      postId: req.params.postId,
+      userId: req.user.id,
+    });
+
+    const post = await Post.findById(req.params.postId, req.user.id);
+    res.json({ data: post });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.deletePost = async (req, res, next) => {
   try {
     const deleted = await Post.delete({

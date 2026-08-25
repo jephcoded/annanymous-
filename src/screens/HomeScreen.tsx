@@ -40,7 +40,10 @@ import {
     getCommentsByPost,
     getFeed,
     getMe,
+    REACTION_OPTIONS,
+    removePostReaction,
     removePostVote,
+    setPostReaction,
     voteOnPost,
 } from "../services/api";
 import { buildContentRecord } from "../services/decentralized";
@@ -115,6 +118,7 @@ const HomeScreen = () => {
   const [cursor, setCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [hasNewPosts, setHasNewPosts] = useState(false);
+  const [reactingPostId, setReactingPostId] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -410,6 +414,40 @@ const HomeScreen = () => {
       }
     },
     [likingPostIds, posts, token],
+  );
+
+  const handleSetReaction = useCallback(
+    async (post: FeedPost, emoji: string) => {
+      if (!token) {
+        setLoadError("Your session expired. Log in again to continue.");
+        return;
+      }
+
+      hapticSelect();
+      setReactingPostId(null);
+      try {
+        const response =
+          post.userReaction === emoji
+            ? await removePostReaction(token, post.id)
+            : await setPostReaction(token, post.id, emoji);
+        setPosts((current) =>
+          current.map((item) =>
+            item.id === post.id
+              ? {
+                  ...item,
+                  reactionCounts: response.data.reactionCounts,
+                  userReaction: response.data.userReaction,
+                }
+              : item,
+          ),
+        );
+      } catch (error) {
+        setLoadError(
+          getFriendlyErrorMessage(error, "Unable to update this reaction."),
+        );
+      }
+    },
+    [token],
   );
 
   const sharePost = useCallback(async (post: FeedPost) => {
@@ -899,6 +937,24 @@ const HomeScreen = () => {
                     }
                   />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.metricButton}
+                  onPress={() =>
+                    setReactingPostId((current) =>
+                      current === item.id ? null : item.id,
+                    )
+                  }
+                >
+                  <Ionicons
+                    name="happy-outline"
+                    size={16}
+                    color={
+                      item.userReaction
+                        ? HOME_COLORS.purple
+                        : HOME_COLORS.accentSoft
+                    }
+                  />
+                </TouchableOpacity>
                 <View style={styles.actionSpacer} />
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -911,6 +967,38 @@ const HomeScreen = () => {
                   />
                 </TouchableOpacity>
               </View>
+
+              {reactingPostId === item.id ? (
+                <View style={styles.reactionPicker}>
+                  {REACTION_OPTIONS.map((emoji) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={[
+                        styles.reactionOption,
+                        item.userReaction === emoji &&
+                          styles.reactionOptionActive,
+                      ]}
+                      onPress={() => void handleSetReaction(item, emoji)}
+                    >
+                      <Text style={styles.reactionOptionEmoji}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+
+              {item.reactionCounts && Object.keys(item.reactionCounts).length ? (
+                <View style={styles.reactionSummaryRow}>
+                  {(
+                    Object.entries(item.reactionCounts) as [string, number][]
+                  ).map(([emoji, count]) => (
+                    <View key={emoji} style={styles.reactionSummaryPill}>
+                      <Text style={styles.reactionSummaryText}>
+                        {emoji} {count}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
 
               <Text style={styles.statsLine}>
                 {authorLabel} . {formatDate(item.createdAt)}
@@ -1500,6 +1588,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginTop: 0,
     marginBottom: 14,
+  },
+  reactionPicker: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  reactionOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  reactionOptionActive: {
+    backgroundColor: "rgba(139,61,255,0.18)",
+  },
+  reactionOptionEmoji: {
+    fontSize: 18,
+  },
+  reactionSummaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  reactionSummaryPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  reactionSummaryText: {
+    color: HOME_COLORS.text,
+    ...TYPOGRAPHY.meta,
+    fontSize: 12,
   },
   captionText: {
     color: HOME_COLORS.text,

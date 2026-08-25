@@ -1,5 +1,29 @@
 const db = require("../config/db");
 
+let reactionSchemaReady = false;
+
+const ensureReactionSchema = async () => {
+  if (reactionSchemaReady) {
+    return;
+  }
+
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS post_reactions (
+       id BIGSERIAL PRIMARY KEY,
+       post_id BIGINT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       emoji TEXT NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       UNIQUE (post_id, user_id)
+     )`,
+  );
+  await db.query(
+    "CREATE INDEX IF NOT EXISTS idx_post_reactions_post ON post_reactions(post_id)",
+  );
+
+  reactionSchemaReady = true;
+};
+
 const sanitizeTag = (value) => value?.trim().toLowerCase() || null;
 
 const sanitizeCategory = (value) => value?.trim().toLowerCase() || "general";
@@ -58,6 +82,8 @@ const buildListQuery = ({
     COALESCE(v.upvotes, 0)::int AS "upVotes",
     COALESCE(v.downvotes, 0)::int AS "downVotes",
     uv.direction AS "userVote",
+    COALESCE(pr.reaction_counts, '{}'::json) AS "reactionCounts",
+    upr.emoji AS "userReaction",
     COALESCE(c.comment_count, 0)::int AS "commentCount",
     COALESCE(po.poll_options, '[]'::json) AS "pollOptions",
     GREATEST(
@@ -79,6 +105,16 @@ const buildListQuery = ({
     GROUP BY post_id
   ) v ON v.post_id = p.id
   LEFT JOIN votes uv ON uv.post_id = p.id AND uv.user_id = ${currentUserIdExpression}
+  LEFT JOIN (
+    SELECT post_id, json_object_agg(emoji, cnt) AS reaction_counts
+    FROM (
+      SELECT post_id, emoji, COUNT(*)::int AS cnt
+      FROM post_reactions
+      GROUP BY post_id, emoji
+    ) reaction_summary
+    GROUP BY post_id
+  ) pr ON pr.post_id = p.id
+  LEFT JOIN post_reactions upr ON upr.post_id = p.id AND upr.user_id = ${currentUserIdExpression}
   LEFT JOIN (
     SELECT post_id, COUNT(*) AS comment_count
     FROM comments
@@ -174,6 +210,7 @@ exports.list = async ({
   mine = false,
   search,
 }) => {
+  await ensureReactionSchema();
   const { query, params } = buildListQuery({
     cursor,
     limit,
@@ -302,6 +339,7 @@ exports.create = async ({
 };
 
 exports.findById = async (id, userId = null) => {
+  await ensureReactionSchema();
   const { query, params } = buildListQuery({ postId: id, limit: 1, userId });
   const result = await db.query(query, params);
   return result.rows[0] || null;
@@ -354,5 +392,33 @@ exports.flag = async (postId, reason, reporterUserId = null) => {
     `INSERT INTO post_flags (post_id, reason, reporter_user_id)
      VALUES ($1, $2, $3)`,
     [postId, reason, reporterUserId],
+  );
+};
+
+const ALLOWED_REACTIONS = ["😂", "😢", "🔥", "😮", "❤️"];
+
+exports.setReaction = async ({ postId, userId, emoji }) => {
+  if (!ALLOWED_REACTIONS.includes(emoji)) {
+    const error = new Error("Unsupported reaction emoji");
+    error.status = 400;
+    error.code = "REACTION_INVALID";
+    throw error;
+  }
+
+  await ensureReactionSchema();
+  await db.query(
+    `INSERT INTO post_reactions (post_id, user_id, emoji)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (post_id, user_id)
+     DO UPDATE SET emoji = $3, created_at = NOW()`,
+    [postId, userId, emoji],
+  );
+};
+
+exports.removeReaction = async ({ postId, userId }) => {
+  await ensureReactionSchema();
+  await db.query(
+    "DELETE FROM post_reactions WHERE post_id = $1 AND user_id = $2",
+    [postId, userId],
   );
 };

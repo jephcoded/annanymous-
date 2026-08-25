@@ -186,6 +186,8 @@ export type FeedPost = {
   upVotes: number;
   downVotes: number;
   userVote?: "up" | "down" | null;
+  reactionCounts?: Record<string, number>;
+  userReaction?: string | null;
   commentCount: number;
   trendingScore: number;
   pollOptions: { id: number; label: string; votes: number }[];
@@ -379,6 +381,8 @@ const normalizeFeedPost = (post: FeedPost): FeedPost => ({
   isOwner: Boolean(post.isOwner),
   mediaUrl: normalizeMediaUrl(post.mediaUrl),
   userVote: post.userVote || null,
+  reactionCounts: post.reactionCounts || {},
+  userReaction: post.userReaction || null,
 });
 
 const buildHeaders = (token?: string | null) => {
@@ -609,6 +613,31 @@ export const removePostVote = async (token: string, postId: number) =>
     method: "DELETE",
     token,
   });
+
+export const REACTION_OPTIONS = ["😂", "😢", "🔥", "😮", "❤️"] as const;
+
+export const setPostReaction = async (
+  token: string,
+  postId: number,
+  emoji: string,
+) =>
+  request<{ data: FeedPost }>(`/posts/${postId}/reactions`, {
+    method: "POST",
+    token,
+    body: { emoji },
+  }).then((response) => ({
+    ...response,
+    data: normalizeFeedPost(response.data),
+  }));
+
+export const removePostReaction = async (token: string, postId: number) =>
+  request<{ data: FeedPost }>(`/posts/${postId}/reactions`, {
+    method: "DELETE",
+    token,
+  }).then((response) => ({
+    ...response,
+    data: normalizeFeedPost(response.data),
+  }));
 
 export const voteOnPoll = async (
   token: string,
