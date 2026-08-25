@@ -596,7 +596,9 @@ const CommentsScreen = () => {
                 </View>
                 <View>
                   <Text style={styles.anonId}>
-                    {item.authorName?.trim() || `u.comment ${item.id}`}
+                    {item.userId != null && item.userId === currentUserId
+                      ? "You"
+                      : "Anonymous"}
                   </Text>
                   <Text style={styles.commentTime}>
                     {formatRelativeTime(item.createdAt)}

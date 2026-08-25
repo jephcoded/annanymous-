@@ -1,12 +1,19 @@
 const db = require("../config/db");
 
-exports.listByPost = async (postId, cursor, limit = 30) => {
+exports.listByPost = async (postId, cursor, limit = 30, viewerUserId = null) => {
   const params = [postId];
+  const viewerExpression = viewerUserId
+    ? `$${params.push(viewerUserId)}`
+    : "NULL";
   let query = `SELECT
     c.id,
     c.post_id AS "postId",
     c.user_id AS "userId",
-    u.display_name AS "authorName",
+    CASE
+      WHEN ${viewerExpression}::bigint IS NOT NULL AND c.user_id = ${viewerExpression}::bigint
+        THEN u.display_name
+      ELSE NULL
+    END AS "authorName",
     c.message,
     json_build_object(
       'contentCid', c.content_cid,
@@ -30,13 +37,23 @@ exports.listByPost = async (postId, cursor, limit = 30) => {
   return result.rows;
 };
 
-exports.listRecent = async (limit = 30) => {
+exports.listRecent = async (limit = 30, viewerUserId = null) => {
+  const params = [];
+  const viewerExpression = viewerUserId
+    ? `$${params.push(viewerUserId)}`
+    : "NULL";
+  params.push(limit);
+
   const result = await db.query(
     `SELECT
        c.id,
        c.post_id AS "postId",
        c.user_id AS "userId",
-       u.display_name AS "authorName",
+       CASE
+         WHEN ${viewerExpression}::bigint IS NOT NULL AND c.user_id = ${viewerExpression}::bigint
+           THEN u.display_name
+         ELSE NULL
+       END AS "authorName",
        c.message,
        json_build_object(
          'contentCid', c.content_cid,
@@ -53,8 +70,8 @@ exports.listRecent = async (limit = 30) => {
      LEFT JOIN users u ON u.id = c.user_id
      WHERE p.deleted_at IS NULL
      ORDER BY c.id DESC
-     LIMIT $1`,
-    [limit],
+     LIMIT $${params.length}`,
+    params,
   );
 
   return result.rows;
@@ -96,7 +113,7 @@ exports.create = async ({ postId, message, userId, decentralized = {} }) => {
        id,
        post_id AS "postId",
        user_id AS "userId",
-       (SELECT display_name FROM users WHERE id = comments.user_id) AS "authorName",
+       NULL AS "authorName",
        message,
        json_build_object(
          'contentCid', content_cid,

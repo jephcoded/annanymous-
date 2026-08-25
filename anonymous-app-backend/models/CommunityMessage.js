@@ -16,7 +16,13 @@ exports.createMessage = async ({ communityId, userId, message }) => {
   return result.rows[0];
 };
 
-exports.getMessages = async (communityId, limit = 50) => {
+exports.getMessages = async (communityId, limit = 50, viewerUserId = null) => {
+  const params = [communityId];
+  const viewerExpression = viewerUserId
+    ? `$${params.push(viewerUserId)}`
+    : "NULL";
+  params.push(limit);
+
   const result = await db.query(
     `SELECT
        m.id,
@@ -24,13 +30,17 @@ exports.getMessages = async (communityId, limit = 50) => {
        m.user_id AS "userId",
        m.message,
        m.created_at AS "createdAt",
-       u.display_name AS sender
+       CASE
+         WHEN ${viewerExpression}::bigint IS NOT NULL AND m.user_id = ${viewerExpression}::bigint
+           THEN u.display_name
+         ELSE NULL
+       END AS sender
      FROM community_messages m
      LEFT JOIN users u ON m.user_id = u.id
      WHERE m.community_id = $1
      ORDER BY m.created_at DESC
-     LIMIT $2`,
-    [communityId, limit],
+     LIMIT $${params.length}`,
+    params,
   );
   return result.rows.reverse(); // oldest first
 };

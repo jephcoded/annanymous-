@@ -52,7 +52,11 @@ exports.getMessages = async (req, res, next) => {
       return res
         .status(403)
         .json({ error: { message: "Not a community member" } });
-    const messages = await CommunityMessage.getMessages(communityId);
+    const messages = await CommunityMessage.getMessages(
+      communityId,
+      50,
+      userId,
+    );
     res.status(200).json({ data: messages });
   } catch (error) {
     next(error);

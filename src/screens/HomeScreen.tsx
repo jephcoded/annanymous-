@@ -816,9 +816,7 @@ const HomeScreen = () => {
           const isLiked = item.userVote === "up";
           const isLiking = Boolean(likingPostIds[item.id]);
           const likeCount = item.upVotes;
-          const authorLabel = item.authorName?.trim()
-            ? item.authorName.trim()
-            : `User_${String(item.userId ?? item.id).slice(-4)}`;
+          const authorLabel = item.isOwner ? "You" : "Anonymous";
           const metaLabel = item.cityTag || item.campusTag || "Anonymous zone";
           const bodyPreview = item.body?.trim() || "";
 
@@ -1185,7 +1183,10 @@ const HomeScreen = () => {
                   )
                 }
                 renderItem={({ item }) => {
-                  const authorLabel = item.authorName?.trim() || "u.comment";
+                  const authorLabel =
+                    item.userId != null && item.userId === currentUserId
+                      ? "You"
+                      : "Anonymous";
                   const avatarColor = getAvatarColor(authorLabel);
                   return (
                     <View style={styles.commentRow}>

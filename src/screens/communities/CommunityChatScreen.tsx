@@ -352,7 +352,10 @@ const CommunityChatScreen = () => {
             )
           }
           renderItem={({ item }) => {
-            const senderName = item.sender || "Anonymous";
+            const senderName =
+              item.userId != null && item.userId === currentUserId
+                ? "You"
+                : "Anonymous";
             const canDelete =
               Boolean(isAdmin) || item.userId === currentUserId;
             return (
