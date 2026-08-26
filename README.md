@@ -1,110 +1,101 @@
-# Welcome to your Expo app 👋
+<p align="center">
+  <img src="assets/images/icon.png" alt="ANON app icon" width="96" />
+</p>
 
-# Anonymous Social App
+<h1 align="center">ANON</h1>
+<p align="center"><b>Private by default.</b> Speak freely, stay anonymous.</p>
 
-Anonymous Social is a privacy-focused social networking app that lets users share thoughts, posts, and comments without revealing their identity. Built with React Native and Expo, it supports both Expo Go for rapid development and native Android builds for production releases.
+## What this is
+
+Most "anonymous message" apps make you copy a link, paste it somewhere, and manually collect replies. ANON skips all of that: people join a shared space (the public feed, or a private invite-only community) and post, comment, vote, and react without anyone — including other members — ever seeing who they are. The server itself never sends another user's name to the app, so there's nothing to reverse-engineer even by inspecting network traffic.
 
 ## Features
 
-- Post anonymously to a public feed
-- Comment and vote on posts
-- Real-time notifications
-- Trending topics and posts
-- Secure backend with Node.js and Express
+- **Anonymous posting** — text, images, polls, and 24-hour disappearing posts, with nobody's identity attached
+- **Communities** — invite-only rooms with an auto-generated join code; the creator becomes admin, admins can approve/remove members and moderate messages
+- **Reactions** — emoji reactions on posts (tap the smiley or long-press a post), plus upvote/downvote
+- **Comments** — threaded replies on any post
+- **Live feed** — new posts appear via a real-time banner (Socket.IO), no need to pull-to-refresh
+- **Search** — full backend search across the feed, not just what's currently loaded
+- **Notifications** — in-app and push notifications for comments, votes, community messages, moderation actions, and more
+- **Account security** — email/password auth, forgot-password (emailed reset code), email verification, change password
+- **Saved posts** — bookmark posts locally to find them again later
+- **Admin dashboard** — a separate web panel for moderation, reading from the same database as the app
+
+## Tech stack
+
+- **App**: React Native + Expo (SDK 54), TypeScript, React Navigation, Socket.IO client
+- **Backend**: Node.js + Express, PostgreSQL, Socket.IO, JWT auth
+- **Builds**: EAS Build for installable Android APKs (the app uses native modules — wallet connect, gesture handling — so it won't run in Expo Go; you need a development build or an EAS build)
+- **Email**: Resend (for password reset / verification codes)
 
 ## Screenshots
 
-<!-- Replace the image links below with your own screenshots -->
-<p align="center">
-  <img src="pic.jpeg" alt="Home Screen" width="250" />
-</p>
+<!-- Add real screenshots here, e.g.: -->
+<!-- <p align="center">
+  <img src="screenshots/home.png" width="220" />
+  <img src="screenshots/profile.png" width="220" />
+  <img src="screenshots/community.png" width="220" />
+</p> -->
 
-## Getting Started
+## Project structure
 
-### Run with Expo Go (Recommended for Development)
+```
+.
+├── App.js                     # App entry point, providers, error boundary
+├── src/
+│   ├── screens/                # Home, Discover, Post composer, Communities, Profile, Auth
+│   ├── contexts/                # Wallet/auth context, Toast context
+│   ├── components/              # Shared UI (HeroHeading, Skeleton, Toast, ...)
+│   ├── services/                # API client
+│   └── utils/                   # Haptics, saved posts, error messages, ...
+├── anonymous-app-backend/
+│   ├── controllers/              # Route handlers
+│   ├── models/                   # Database queries
+│   ├── routes/                   # Express routers
+│   ├── services/                 # Notifications, push, email, trending
+│   └── database/schema.sql       # Full Postgres schema
+└── src/admin/AdminDashboard.tsx  # Standalone moderation web panel
+```
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Start the Expo server:
-   ```bash
-   npx expo start
-   ```
-3. Scan the QR code with the Expo Go app on your device.
+## Getting started
 
-### Build Native Android APK
+### 1. Backend
 
-1. Navigate to the `android` folder:
-   ```bash
-   cd android
-   ```
-2. Build the release APK:
-   ```bash
-   gradlew.bat assembleRelease
-   ```
-3. Find the APK in `android/app/build/outputs/apk/release/`.
+```bash
+cd anonymous-app-backend
+npm install
+cp .env.example .env   # fill in DATABASE_URL, JWT_SECRET, etc.
+npm run db:migrate     # applies database/schema.sql
+npm run dev            # starts the API on http://localhost:4000
+```
 
-## Backend
+### 2. App
 
-The backend is located in the `anonymous-app-backend` folder. It uses Node.js, Express, and a SQL database. See the backend README for setup instructions.
+```bash
+npm install
+cp .env.example .env   # point EXPO_PUBLIC_API_BASE_URL at your backend
+```
 
-## Live Admin Dashboard
+Because of native dependencies, run one of:
 
-The standalone admin dashboard can be deployed as a separate web service with `npm run admin:web`. When it is pointed at the same backend as the mobile app, deleting or moderating a post in the dashboard updates the app feed immediately because both read from the same database.
+```bash
+npx expo run:android        # build + install locally (needs Android Studio/adb)
+eas build --platform android --profile preview   # cloud build, produces an installable APK
+```
+
+### 3. Admin dashboard (optional)
+
+```bash
+npm run admin:web
+```
+
+Point it at the same backend as the app — moderating a post there updates the live app feed immediately.
 
 ## Contributing
 
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+Pull requests are welcome. For larger changes, open an issue first to discuss what you'd like to change.
 
 ## License
 
 MIT
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
