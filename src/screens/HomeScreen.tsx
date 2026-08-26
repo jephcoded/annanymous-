@@ -854,13 +854,25 @@ const HomeScreen = () => {
               </View>
 
               {bodyPreview ? (
-                <Text style={styles.captionText}>{bodyPreview}</Text>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onLongPress={() => {
+                    hapticSelect();
+                    setReactingPostId(item.id);
+                  }}
+                >
+                  <Text style={styles.captionText}>{bodyPreview}</Text>
+                </TouchableOpacity>
               ) : null}
 
               {hasRenderableMedia(item) ? (
                 <TouchableOpacity
                   activeOpacity={0.94}
                   onPress={() => openMediaViewer(item)}
+                  onLongPress={() => {
+                    hapticSelect();
+                    setReactingPostId(item.id);
+                  }}
                 >
                   <Image
                     source={{ uri: item.mediaUrl ?? undefined }}
