@@ -31,12 +31,12 @@ Most "anonymous message" apps make you copy a link, paste it somewhere, and manu
 
 ## Screenshots
 
-<!-- Add real screenshots here, e.g.: -->
-<!-- <p align="center">
-  <img src="screenshots/home.png" width="220" />
-  <img src="screenshots/profile.png" width="220" />
-  <img src="screenshots/community.png" width="220" />
-</p> -->
+<p align="center">
+  <img src="screenshots/home.png" width="200" />
+  <img src="screenshots/post.png" width="200" />
+  <img src="screenshots/community.png" width="200" />
+  <img src="screenshots/profile.png" width="200" />
+</p>
 
 ## Project structure
 
